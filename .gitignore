@@ -1,0 +1,32 @@
+# general
+.virtual_documents
+.ipynb_checkpoints
+__pycache__
+.vscode
+.idea
+
+# wandb
+wandb
+
+# file types
+*.pkl
+*.pth
+*.aux
+*.blg
+*.log
+*.out
+*.bbl
+*.synctex.gz
+
+# directories
+hw1/stud/embeddings/*
+!hw1/stud/embeddings/.placeholder
+
+hw1/stud/checkpoints/*
+!hw1/stud/checkpoints/.placeholder
+
+hw1/stud/outputs/*
+!hw1/stud/outputs/.placeholder
+
+logs/*
+!logs/.placeholder
