@@ -1,3 +1,4 @@
+import re
 import nltk
 import json
 import torch
@@ -10,13 +11,36 @@ from torchtext.vocab import Vocab
 
 nltk.download("punkt")
 
-def token_position(sentence, position)
+sentiment_to_idx = {
+    sentiment: idx
+    for idx, sentiment in enumerate(["positive", "negative", "neutral", "conflict"])
+}
+
+idx_to_sentiment = {idx: sentiment for sentiment, idx in sentiment_to_idx.items()}
+
+
+def idx_to_one_hot(idx: int, num_classes: int) -> List[int]:
+    one_hot = [0] * num_classes
+    one_hot[idx] = 1
+    return one_hot
+
+
+def tokens_position(sentence: str, target_char_positions: List[int]) -> List[int]:
+    """Extract tokens positions from position in string."""
+    s_pos, e_pos = target_char_positions
+    n_tokens = len(word_tokenize(sentence[s_pos:e_pos]))
+    s_token = len(re.findall(r" +", sentence[:s_pos]))
+    return list(range(s_token, s_token + n_tokens))
 
 
 def read_data(path: str) -> Tuple[list, list, list]:
-    # read from json file
+    """Read data from json file."""
     with open(path) as f:
         raw_data = json.load(f)
+    return raw_data
+
+
+def preprocess(raw_data):
     # split data in 2 + 1 lists (3 for restaurants data, 2 for laptops data):
     # for both datasets: sentences (i.e., raw text), targets (i.e., position range, instance, sentiment),
     # for restaurant dataset: categories (i.e., category, sentiment)
@@ -25,10 +49,17 @@ def read_data(path: str) -> Tuple[list, list, list]:
     categories = []
     for d in raw_data:
         # tokenize text data
-        sentences.append(word_tokenize(d["text"]))
-        # extract targets. can be 0, 1 or multiple
+        s = d["text"]
+        sentences.append(word_tokenize(s))
+        # extract targets: can either be 0, 1 or multiple
         t = [
-            {"position": tuple(x[0]), "instance": x[1], "sentiment": x[2]}
+            {
+                "tokens_position": tokens_position(s, x[0]),
+                # TODO: is the `instance` key necessary?
+                "instance": x[1],
+                # TODO: is one-hot right?
+                "sentiment": idx_to_one_hot(sentiment_to_idx[x[2]]),
+            }
             for x in d["targets"]
         ]
         targets.append(t)
