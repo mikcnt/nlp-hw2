@@ -11,19 +11,6 @@ from torchtext.vocab import Vocab
 
 nltk.download("punkt")
 
-sentiment_to_idx = {
-    sentiment: idx
-    for idx, sentiment in enumerate(["positive", "negative", "neutral", "conflict"])
-}
-
-idx_to_sentiment = {idx: sentiment for sentiment, idx in sentiment_to_idx.items()}
-
-
-def idx_to_one_hot(idx: int, num_classes: int) -> List[int]:
-    one_hot = [0] * num_classes
-    one_hot[idx] = 1
-    return one_hot
-
 
 def tokens_position(sentence: str, target_char_positions: List[int]) -> List[int]:
     """Extract tokens positions from position in string."""
@@ -46,69 +33,97 @@ def preprocess(raw_data):
     # for restaurant dataset: categories (i.e., category, sentiment)
     sentences = []
     targets = []
-    categories = []
+    # TODO: categories
     for d in raw_data:
-        # tokenize text data
-        s = d["text"]
-        sentences.append(word_tokenize(s))
-        # extract targets: can either be 0, 1 or multiple
-        t = [
-            {
-                "tokens_position": tokens_position(s, x[0]),
-                # TODO: is the `instance` key necessary?
-                "instance": x[1],
-                # TODO: is one-hot right?
-                "sentiment": idx_to_one_hot(sentiment_to_idx[x[2]]),
-            }
-            for x in d["targets"]
-        ]
-        targets.append(t)
-        # extract categories. can be 0, 1 or multiple (for the restaurant dataset)
-        if "categories" in d.keys():
-            c = [{"category": x[0], "sentiment": x[1]} for x in d["categories"]]
-            categories.append(c)
+        # extract tokens
+        text = d["text"]
+        tokens = word_tokenize(text)
+        # possible sentiments are: positive, negative, neutral, conflict
+        # `B-sentiment` means that it's the starting token of a sequence (possibly of length 1)
+        # `I-sentiment` means that it's following another token (either B- or another I-) of a sequence
+        # `0` means that no sentiment is involved with that the token
+        sentiments = ["0"] * len(tokens)
+        for start_end, instance, sentiment in d["targets"]:
+            sentiment_positions = tokens_position(text, start_end)
+            for i, s in enumerate(sentiment_positions):
+                if i == 0:
+                    sentiments[s] = "B-" + sentiment
+                else:
+                    sentiments[s] = "I-" + sentiment
 
-    return sentences, targets, categories
+        sentences.append(tokens)
+        targets.append(sentiments)
+
+    return sentences, targets
 
 
-def build_vocab(sentences: List[str], min_freq: int = 1) -> Vocab:
+def build_vocab(data: List[str], specials: List[str], min_freq: int = 1) -> Vocab:
     counter = Counter()
-    for i in tqdm(range(len(sentences))):
-        for token in sentences[i]:
-            if token is not None:
-                counter[token] += 1
-    return Vocab(counter, specials=["<pad>", "<unk>"], min_freq=min_freq)
+    for i in tqdm(range(len(data))):
+        for t in data[i]:
+            if t is not None:
+                counter[t] += 1
+    return Vocab(counter, specials=specials, min_freq=min_freq)
 
 
 class ABSADataset(Dataset):
     def __init__(
         self,
-        sentences: List[str],
+        sentences: List[List[str]],
         targets: List[Any],
-        categories: List[Any],
         vocabulary: Vocab,
+        sentiments_vocabulary: Vocab,
+        max_len: int,
     ) -> None:
         super(ABSADataset, self).__init__()
         self.sentences = sentences
         self.targets = targets
-        self.categories = categories
-        self.encoded_sentences = self.encode_text(self.sentences, vocabulary)
+        self.encoded_data = []
+        self.vocabulary = vocabulary
+        self.sentiments_vocabulary = sentiments_vocabulary
+        self.max_len = max_len
+        self.index_dataset()
 
-    @staticmethod
-    def encode_text(sentence: List[str], vocabulary: Vocab) -> List[int]:
+    def encode_text(self, sentence: List[str]) -> List[int]:
         indices = []
         for w in sentence:
-            # TODO: why would it be `None`?
-            if w is None:
-                indices.append(vocabulary["<pad>"])
-            elif w in vocabulary.stoi:
-                indices.append(vocabulary[w])
+            if w in self.vocabulary.stoi:
+                indices.append(self.vocabulary[w])
             else:
-                indices.append(vocabulary.unk_index)
+                indices.append(self.vocabulary.unk_index)
         return indices
 
-    def __len__(self) -> int:
-        return len(self.sentences)
+    def index_dataset(self):
+        assert len(self.sentences) == len(self.targets)
+        for i in range(len(self.sentences)):
+            sentence = self.sentences[i]
+            targets = self.targets[i]
+            # encode sentences and targets
+            encoded_elem = self.encode_text(sentence)
+            encoded_labels = [self.sentiments_vocabulary[t] for t in targets]
+            # pad sequences
+            encoded_elem = torch.LongTensor(
+                self.pad_sequence(encoded_elem, pad_token=self.vocabulary["<pad>"])
+            )
+            encoded_labels = torch.LongTensor(
+                self.pad_sequence(
+                    encoded_labels, pad_token=self.sentiments_vocabulary["<pad>"]
+                )
+            )
+            self.encoded_data.append(
+                {"inputs": encoded_elem, "outputs": encoded_labels}
+            )
 
-    def __getitem__(self, index: int) -> torch.Tensor:
-        pass
+    def pad_sequence(self, sequence, pad_token: int) -> List[int]:
+        padded_sequence = [pad_token] * self.max_len
+        for i, tk_idx in enumerate(sequence):
+            if i >= self.max_len:
+                break
+            padded_sequence[i] = tk_idx
+        return padded_sequence
+
+    def __len__(self) -> int:
+        return len(self.encoded_data)
+
+    def __getitem__(self, index: int) -> Tuple[torch.LongTensor, torch.LongTensor]:
+        return self.encoded_data[index]
