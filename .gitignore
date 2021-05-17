@@ -19,9 +19,6 @@ wandb
 *.synctex.gz
 
 # directories
-hw1/stud/embeddings/*
-!hw1/stud/embeddings/.placeholder
-
 hw1/stud/checkpoints/*
 !hw1/stud/checkpoints/.placeholder
 
