@@ -19,11 +19,10 @@ wandb
 *.synctex.gz
 
 # directories
-hw1/stud/checkpoints/*
-!hw1/stud/checkpoints/.placeholder
+hw2/stud/checkpoints/*
+!hw2/stud/checkpoints/.placeholder
 
-hw1/stud/outputs/*
-!hw1/stud/outputs/.placeholder
+hw2/stud/lightning_logs/
 
 logs/*
 !logs/.placeholder

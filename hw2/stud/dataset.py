@@ -2,11 +2,12 @@ import re
 import nltk
 import json
 import torch
+import pytorch_lightning as pl
 from collections import Counter
 from tqdm import tqdm
-from typing import List, Tuple, Any
+from typing import List, Tuple, Dict
 from nltk.tokenize import word_tokenize
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from torchtext.vocab import Vocab
 
 nltk.download("punkt")
@@ -31,8 +32,7 @@ def preprocess(raw_data):
     # split data in 2 + 1 lists (3 for restaurants data, 2 for laptops data):
     # for both datasets: sentences (i.e., raw text), targets (i.e., position range, instance, sentiment),
     # for restaurant dataset: categories (i.e., category, sentiment)
-    sentences = []
-    targets = []
+    processed_data = {"sentences": [], "targets": []}
     # TODO: categories
     for d in raw_data:
         # extract tokens
@@ -51,10 +51,10 @@ def preprocess(raw_data):
                 else:
                     sentiments[s] = "I-" + sentiment
 
-        sentences.append(tokens)
-        targets.append(sentiments)
+        processed_data["sentences"].append(tokens)
+        processed_data["targets"].append(sentiments)
 
-    return sentences, targets
+    return processed_data
 
 
 def build_vocab(data: List[str], specials: List[str], min_freq: int = 1) -> Vocab:
@@ -66,22 +66,29 @@ def build_vocab(data: List[str], specials: List[str], min_freq: int = 1) -> Voca
     return Vocab(counter, specials=specials, min_freq=min_freq)
 
 
+def dataset_max_len(sentences: List[List[str]]) -> int:
+    max_len = 0
+    for s in sentences:
+        length = len(s)
+        if length > max_len:
+            max_len = length
+    return max_len
+
+
 class ABSADataset(Dataset):
     def __init__(
         self,
-        sentences: List[List[str]],
-        targets: List[Any],
+        processed_data: Dict[str, List[List[str]]],
         vocabulary: Vocab,
         sentiments_vocabulary: Vocab,
-        max_len: int,
     ) -> None:
         super(ABSADataset, self).__init__()
-        self.sentences = sentences
-        self.targets = targets
+        self.sentences = processed_data["sentences"]
+        self.targets = processed_data["targets"]
         self.encoded_data = []
         self.vocabulary = vocabulary
         self.sentiments_vocabulary = sentiments_vocabulary
-        self.max_len = max_len
+        self.max_len = dataset_max_len(self.sentences)
         self.index_dataset()
 
     def encode_text(self, sentence: List[str]) -> List[int]:
@@ -127,3 +134,37 @@ class ABSADataset(Dataset):
 
     def __getitem__(self, index: int) -> Tuple[torch.LongTensor, torch.LongTensor]:
         return self.encoded_data[index]
+
+
+class DataModuleABSA(pl.LightningDataModule):
+    def __init__(
+        self,
+        train_data,
+        dev_data,
+        vocabulary,
+        sentiments_vocabulary,
+    ):
+
+        super().__init__()
+        self.train_data = train_data
+        self.dev_data = dev_data
+        self.vocabulary = vocabulary
+        self.sentiments_vocabulary = sentiments_vocabulary
+
+    def setup(self, stage=None):
+        self.trainset = ABSADataset(
+            self.train_data,
+            self.vocabulary,
+            self.sentiments_vocabulary,
+        )
+        self.devset = ABSADataset(
+            self.dev_data,
+            self.vocabulary,
+            self.sentiments_vocabulary,
+        )
+
+    def train_dataloader(self):
+        return DataLoader(self.trainset, batch_size=128, shuffle=True)
+
+    def val_dataloader(self):
+        return DataLoader(self.devset, batch_size=128, shuffle=False)
