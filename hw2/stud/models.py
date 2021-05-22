@@ -6,7 +6,7 @@ class ABSAModel(nn.Module):
     # we provide the hyperparameters as input
     def __init__(self, hparams, embeddings=None):
         super(ABSAModel, self).__init__()
-        # Embedding layer: a mat∂rix vocab_size x embedding_dim where each index
+        # Embedding layer: a matrix vocab_size x embedding_dim where each index
         # correspond to a word in the vocabulary and the i-th row corresponds to
         # a latent representation of the i-th word in the vocabulary.
         self.word_embedding = nn.Embedding(hparams.vocab_size, hparams.embedding_dim)

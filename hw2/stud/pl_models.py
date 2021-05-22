@@ -11,13 +11,13 @@ from hw2.stud.utils import (
 
 
 class PlABSAModel(pl.LightningModule):
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, embeddings, hparams) -> None:
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(hparams)
         self.loss_function = nn.CrossEntropyLoss(
             ignore_index=self.hparams.sentiments_vocabulary["<pad>"]
         )
-        self.model = ABSAModel(self.hparams, self.hparams.embeddings)
+        self.model = ABSAModel(self.hparams, embeddings)
         self.sentiments_converter = TokenToSentimentsConverter()
 
     def forward(self, input_tensor: torch.Tensor) -> Dict[str, torch.Tensor]:

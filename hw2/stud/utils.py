@@ -56,22 +56,17 @@ def evaluate_extraction(samples, predictions_b):
         scores["fp"] += len(pred_terms - gt_terms)
         scores["fn"] += len(gt_terms - pred_terms)
 
-    precision = 100 * scores["tp"] / (scores["tp"] + scores["fp"])
-    recall = 100 * scores["tp"] / (scores["tp"] + scores["fn"])
-    f1 = 2 * precision * recall / (precision + recall)
-
-    # print(f"Aspect Extraction Evaluation")
-    #
-    # print(
-    #     "\tAspects\t TP: {};\tFP: {};\tFN: {}".format(
-    #         scores["tp"], scores["fp"], scores["fn"]
-    #     )
-    # )
-    # print(
-    #     "\t\tprecision: {:.2f};\trecall: {:.2f};\tf1: {:.2f}".format(
-    #         precision, recall, f1
-    #     )
-    # )
+    precision = (
+        100 * scores["tp"] / (scores["tp"] + scores["fp"])
+        if scores["tp"] + scores["fp"] != 0
+        else 0
+    )
+    recall = (
+        100 * scores["tp"] / (scores["tp"] + scores["fn"])
+        if scores["tp"] + scores["fn"] != 0
+        else 0
+    )
+    f1 = 2 * precision * recall / (precision + recall) if precision or recall else 0.0
     return f1
 
 
@@ -180,39 +175,5 @@ def evaluate_sentiment(samples, predictions_b, mode="Aspect Sentiment"):
     scores["ALL"]["Macro_r"] = sum(
         [scores[ent_type]["r"] for ent_type in sentiment_types]
     ) / len(sentiment_types)
-
-    # print(f"{mode} Evaluation\n")
-    #
-    # print(
-    #     "\tALL\t TP: {};\tFP: {};\tFN: {}".format(
-    #         scores["ALL"]["tp"], scores["ALL"]["fp"], scores["ALL"]["fn"]
-    #     )
-    # )
-    # print(
-    #     "\t\t(m avg): precision: {:.2f};\trecall: {:.2f};\tf1: {:.2f} (micro)".format(
-    #         precision, recall, f1
-    #     )
-    # )
-    # print(
-    #     "\t\t(M avg): precision: {:.2f};\trecall: {:.2f};\tf1: {:.2f} (Macro)\n".format(
-    #         scores["ALL"]["Macro_p"],
-    #         scores["ALL"]["Macro_r"],
-    #         scores["ALL"]["Macro_f1"],
-    #     )
-    # )
-    #
-    # for sent_type in sentiment_types:
-    #     print(
-    #         "\t{}: \tTP: {};\tFP: {};\tFN: {};\tprecision: {:.2f};\trecall: {:.2f};\tf1: {:.2f};\t{}".format(
-    #             sent_type,
-    #             scores[sent_type]["tp"],
-    #             scores[sent_type]["fp"],
-    #             scores[sent_type]["fn"],
-    #             scores[sent_type]["p"],
-    #             scores[sent_type]["r"],
-    #             scores[sent_type]["f1"],
-    #             scores[sent_type]["tp"] + scores[sent_type]["fp"],
-    #         )
-    #     )
 
     return f1
