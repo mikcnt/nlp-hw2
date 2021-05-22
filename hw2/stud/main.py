@@ -1,7 +1,7 @@
 import torch
 import pytorch_lightning as pl
 from dataset import read_data, preprocess, build_vocab, ABSADataset, DataModuleABSA
-from models import PlABSAModel
+from pl_models import PlABSAModel
 
 if __name__ == "__main__":
     pl.seed_everything(42)
