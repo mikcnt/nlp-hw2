@@ -27,6 +27,8 @@ if __name__ == "__main__":
         "num_layers": 1,
         "dropout": 0.0,
         "embeddings": None,
+        "train_raw_data": train_raw_data,
+        "dev_raw_data": dev_raw_data,
         "vocabulary": vocabulary,
         "sentiments_vocabulary": sentiments_vocabulary,
     }
@@ -37,6 +39,6 @@ if __name__ == "__main__":
         vocabulary,
         sentiments_vocabulary,
     )
-    trainer = pl.Trainer(gpus=1, val_check_interval=1.0, max_epochs=25)
+    trainer = pl.Trainer(gpus=1, val_check_interval=1.0, max_epochs=100)
     model = PlABSAModel(**hparams)
     trainer.fit(model, datamodule=data_module)

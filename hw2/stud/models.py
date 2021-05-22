@@ -4,7 +4,11 @@ import pytorch_lightning as pl
 from torch import nn, optim
 from typing import *
 
-from hw2.stud.utils import TokenToSentimentsConverter
+from hw2.stud.utils import (
+    TokenToSentimentsConverter,
+    evaluate_extraction,
+    evaluate_sentiment,
+)
 
 
 class ABSAModel(nn.Module):
@@ -63,11 +67,6 @@ class PlABSAModel(pl.LightningModule):
         self.loss_function = nn.CrossEntropyLoss(
             ignore_index=self.hparams.sentiments_vocabulary["<pad>"]
         )
-        self.f1 = torchmetrics.F1(
-            average="macro",
-            num_classes=len(self.hparams.sentiments_vocabulary),
-            ignore_index=self.hparams.sentiments_vocabulary["<pad>"],
-        )
         self.model = ABSAModel(self.hparams, self.hparams.embeddings)
         self.sentiments_converter = TokenToSentimentsConverter()
 
@@ -81,12 +80,17 @@ class PlABSAModel(pl.LightningModule):
     def forward_sentiments(
         self,
         input_tensor: torch.Tensor,
+        lengths: Optional[torch.Tensor] = None,
     ):
         # compute outputs
         output_tensor = self.forward(input_tensor)["predictions"]
         # convert input and output to list
         input_list: List[List[int]] = input_tensor.tolist()
         output_list: List[List[int]] = output_tensor.tolist()
+        if lengths is not None:
+            for i, length in enumerate(lengths):
+                input_list[i] = input_list[i][:length]
+                output_list[i] = output_list[i][:length]
 
         # extract tokens and associated sentiments
         input_tokens = [
@@ -118,14 +122,9 @@ class PlABSAModel(pl.LightningModule):
 
         # Compute the loss:
         loss = self.loss_function(logits, labels)
-        # Compute f1 score
-        mask = labels != 0
-        labels = labels[mask]
-        predictions = predictions[mask]
-        f1_score = self.f1(predictions, labels)
         # Log it:
         self.log_dict(
-            {"train_loss": loss, "train_f1 score": self.f1(predictions, labels)},
+            {"train_loss": loss},
             prog_bar=True,
         )
         # Very important for PL to return the loss that will be used to update the weights:
@@ -136,7 +135,7 @@ class PlABSAModel(pl.LightningModule):
     def validation_step(self, batch, batch_nb):
         inputs = batch["inputs"]
         labels = batch["outputs"]
-
+        lengths = (labels != 0).sum(-1)
         outputs = self.forward(inputs)
         logits = outputs["logits"]
         predictions = outputs["predictions"].view(-1)
@@ -145,25 +144,18 @@ class PlABSAModel(pl.LightningModule):
         labels = labels.view(-1)
         sample_loss = self.loss_function(logits, labels)
         self.log_dict(
-            {"valid_loss": sample_loss, "valid_f1 score": self.f1(predictions, labels)},
+            {"valid_loss": sample_loss},
             prog_bar=True,
         )
+        tokens2sentiments = self.forward_sentiments(inputs, lengths)
+        return tokens2sentiments
 
-    # This runs the model in eval mode, ie. sets dropout to 0
-    # and deactivates grad. Needed when we are in inference mode.
-    def test_step(self, batch, batch_nb):
-        inputs = batch["inputs"]
-        labels = batch["outputs"]
-
-        outputs = self.forward(inputs)
-        logits = outputs["logits"]
-        predictions = outputs["predictions"].view(-1)
-        # We adapt the logits and labels to fit the format required for the loss function
-        logits = logits.view(-1, logits.shape[-1])
-        labels = labels.view(-1)
-        sample_loss = self.loss_function(logits, labels)
+    def validation_epoch_end(self, outputs) -> None:
+        outputs = [item for sublist in outputs for item in sublist]
+        f1_extraction = evaluate_extraction(self.hparams.dev_raw_data, outputs)
+        f1_sentiment = evaluate_sentiment(self.hparams.dev_raw_data, outputs)
         self.log_dict(
-            {"test_loss": sample_loss, "test_f1 score": self.f1(predictions, labels)},
+            {"f1_extraction": f1_extraction, "f1_sentiment": f1_sentiment},
             prog_bar=True,
         )
 
