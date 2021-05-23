@@ -57,15 +57,9 @@ def evaluate_extraction(samples, predictions_b):
         scores["fn"] += len(gt_terms - pred_terms)
 
     precision = (
-        100 * scores["tp"] / (scores["tp"] + scores["fp"])
-        if scores["tp"] + scores["fp"] != 0
-        else 0
+        scores["tp"] / (scores["tp"] + scores["fp"]) if scores["fp"] != 0 else 1.0
     )
-    recall = (
-        100 * scores["tp"] / (scores["tp"] + scores["fn"])
-        if scores["tp"] + scores["fn"] != 0
-        else 0
-    )
+    recall = scores["tp"] / (scores["tp"] + scores["fn"]) if scores["fn"] != 0 else 1.0
     f1 = 2 * precision * recall / (precision + recall) if precision or recall else 0.0
     return f1
 
@@ -151,8 +145,8 @@ def evaluate_sentiment(samples, predictions_b, mode="Aspect Sentiment"):
     fn = sum([scores[sent_type]["fn"] for sent_type in sentiment_types])
 
     if tp:
-        precision = 100 * tp / (tp + fp)
-        recall = 100 * tp / (tp + fn)
+        precision = tp / (tp + fp)
+        recall = tp / (tp + fn)
         f1 = 2 * precision * recall / (precision + recall)
 
     else:

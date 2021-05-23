@@ -33,16 +33,17 @@ if __name__ == "__main__":
     pretrained_embeddings[vocabulary["<pad>"]] = torch.zeros(vectors.dim)
     hparams = {
         "vocab_size": len(vocabulary),
-        "hidden_dim": 256,
+        "hidden_dim": 300,
         "embedding_dim": vectors.dim,
         "num_classes": len(sentiments_vocabulary),
-        "bidirectional": True,
-        "num_layers": 2,
+        "bidirectional": False,
+        "num_layers": 1,
         "dropout": 0.5,
         "train_raw_data": train_raw_data,
         "dev_raw_data": dev_raw_data,
         "vocabulary": vocabulary,
         "sentiments_vocabulary": sentiments_vocabulary,
+        "lr": 0.01,
     }
 
     data_module = DataModuleABSA(
