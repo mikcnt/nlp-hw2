@@ -109,4 +109,8 @@ class PlABSAModel(pl.LightningModule):
         )
 
     def configure_optimizers(self) -> optim.Optimizer:
-        return optim.Adam(self.parameters(), lr=self.hparams.lr)
+        return optim.Adam(
+            self.parameters(),
+            lr=self.hparams.lr,
+            weight_decay=self.hparams.weight_decay,
+        )
