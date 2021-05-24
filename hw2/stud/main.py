@@ -35,9 +35,9 @@ if __name__ == "__main__":
             pretrained_embeddings[i] = vec
     pretrained_embeddings[vocabulary["<pad>"]] = torch.zeros(vectors.dim)
     # define hyper parameters
-    raw_data = {
-        "train": train_raw_data,
-        "dev": dev_raw_data,
+    vocabularies = {
+        "vocabulary": vocabulary,
+        "sentiments_vocabulary": sentiments_vocabulary,
     }
     hparams = {
         "vocab_size": len(vocabulary),
@@ -49,8 +49,6 @@ if __name__ == "__main__":
         "dropout": 0.5,
         "lr": 0.001,
         "weight_decay": 0.0,
-        "vocabulary": vocabulary,
-        "sentiments_vocabulary": sentiments_vocabulary,
     }
     # load data
     data_module = DataModuleABSA(
@@ -60,7 +58,7 @@ if __name__ == "__main__":
         sentiments_vocabulary,
     )
     # define model
-    model = PlABSAModel(pretrained_embeddings, raw_data, hparams)
+    model = PlABSAModel(hparams, vocabularies, pretrained_embeddings)
 
     # callbacks
     # early stopping
