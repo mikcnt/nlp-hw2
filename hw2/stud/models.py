@@ -37,12 +37,10 @@ class ABSAModel(nn.Module):
         self.dropout = nn.Dropout(hparams.dropout)
         self.classifier = nn.Linear(lstm_output_dim, hparams.num_classes)
 
-    def forward(self, batch):
-        input_tensor = batch["inputs"]
-        lengths = batch["lengths"]
-        embeddings = self.word_embedding(input_tensor)
+    def forward(self, x, x_lengths):
+        embeddings = self.word_embedding(x)
         embeddings = self.dropout(embeddings)
-        o, o_lengths = lstm_padded(self.lstm, embeddings, lengths)
+        o, o_lengths = lstm_padded(self.lstm, embeddings, x_lengths)
         o = self.dropout(o)
         output = self.classifier(o)
         return output

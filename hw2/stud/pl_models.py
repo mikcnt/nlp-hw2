@@ -4,8 +4,8 @@ import pytorch_lightning as pl
 from torch import nn, optim
 from torchtext.vocab import Vocab
 
-from hw2.stud.metrics import F1SentimentExtraction
-from hw2.stud.models import ABSAModel
+from stud.metrics import F1SentimentExtraction, TokenToSentimentsConverter
+from stud.models import ABSAModel
 
 
 class PlABSAModel(pl.LightningModule):
@@ -21,6 +21,9 @@ class PlABSAModel(pl.LightningModule):
         self.save_hyperparameters(hparams)
         vocabulary = vocabularies["vocabulary"]
         sentiments_vocabulary = vocabularies["sentiments_vocabulary"]
+        self.sentiments_converter = TokenToSentimentsConverter(
+            vocabulary, sentiments_vocabulary
+        )
         self.loss_function = nn.CrossEntropyLoss(
             ignore_index=sentiments_vocabulary["<pad>"]
         )
@@ -31,21 +34,31 @@ class PlABSAModel(pl.LightningModule):
         self.model = ABSAModel(self.hparams, embeddings)
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-        logits = self.model(batch)
+        sentences = batch["inputs"]
+        lengths = batch["lengths"]
+        logits = self.model(sentences, lengths)
         predictions = torch.argmax(logits, -1)
         return {"logits": logits, "predictions": predictions}
 
+    def forward_processed(self, batch: Dict[str, torch.Tensor]):
+        sentences = batch["inputs"]
+        lengths = batch["lengths"]
+        predictions = self(batch)["predictions"]
+        processed_output = self.sentiments_converter.postprocess(
+            sentences, predictions, lengths
+        )
+        return processed_output
+
     def step(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         sentences = batch["inputs"]
-        labels = batch["outputs"]
         lengths = batch["lengths"]
+        labels = batch["outputs"]
         # We receive one batch of data and perform a forward pass:
-        output_batch = self.forward(batch)
-        logits = output_batch["logits"]
-        predictions = output_batch["predictions"]
+        logits = self.model(sentences, lengths)
+        predictions = torch.argmax(logits, -1)
         # We adapt the logits and labels to fit the format required for the loss function
         logits = logits.view(-1, logits.shape[-1])
-        # compute loss
+        # compute loss and f1 score
         loss = self.loss_function(logits, labels.view(-1))
         f1_score = self.f1_extraction(sentences, predictions, labels, lengths)
         return loss, f1_score

@@ -10,7 +10,7 @@ from nltk.tokenize import word_tokenize
 from torch.utils.data import Dataset, DataLoader
 from torchtext.vocab import Vocab
 
-from hw2.stud.utils import pad_collate
+from stud.utils import pad_collate
 
 nltk.download("punkt")
 
@@ -30,7 +30,7 @@ def read_data(path: str) -> Tuple[list, list, list]:
     return raw_data
 
 
-def preprocess(raw_data):
+def preprocess(raw_data, preprocess_targets=True):
     # split data in 2 + 1 lists (3 for restaurants data, 2 for laptops data):
     # for both datasets: sentences (i.e., raw text), targets (i.e., position range, instance, sentiment),
     # for restaurant dataset: categories (i.e., category, sentiment)
@@ -40,21 +40,21 @@ def preprocess(raw_data):
         # extract tokens
         text = d["text"]
         tokens = word_tokenize(text)
-        # possible sentiments are: positive, negative, neutral, conflict
-        # `B-sentiment` means that it's the starting token of a sequence (possibly of length 1)
-        # `I-sentiment` means that it's following another token (either B- or another I-) of a sequence
-        # `0` means that no sentiment is involved with that the token
-        sentiments = ["0"] * len(tokens)
-        for start_end, instance, sentiment in d["targets"]:
-            sentiment_positions = tokens_position(text, start_end)
-            for i, s in enumerate(sentiment_positions):
-                if i == 0:
-                    sentiments[s] = "B-" + sentiment
-                else:
-                    sentiments[s] = "I-" + sentiment
-
         processed_data["sentences"].append(tokens)
-        processed_data["targets"].append(sentiments)
+        if preprocess_targets:
+            # possible sentiments are: positive, negative, neutral, conflict
+            # `B-sentiment` means that it's the starting token of a sequence (possibly of length 1)
+            # `I-sentiment` means that it's following another token (either B- or another I-) of a sequence
+            # `0` means that no sentiment is involved with that the token
+            sentiments = ["0"] * len(tokens)
+            for start_end, instance, sentiment in d["targets"]:
+                sentiment_positions = tokens_position(text, start_end)
+                for i, s in enumerate(sentiment_positions):
+                    if i == 0:
+                        sentiments[s] = "B-" + sentiment
+                    else:
+                        sentiments[s] = "I-" + sentiment
+            processed_data["targets"].append(sentiments)
 
     return processed_data
 
@@ -103,20 +103,22 @@ class ABSADataset(Dataset):
         return indices
 
     def index_dataset(self):
-        assert len(self.sentences) == len(self.targets)
         for i in range(len(self.sentences)):
+            data_dict = {}
             sentence = self.sentences[i]
-            targets = self.targets[i]
-            # encode sentences and targets
             encoded_elem = self.encode_text(sentence)
-            encoded_labels = [self.sentiments_vocabulary[t] for t in targets]
-
             encoded_elem = torch.LongTensor(encoded_elem)
-            encoded_labels = torch.LongTensor(encoded_labels)
+            data_dict["inputs"] = encoded_elem
 
-            self.encoded_data.append(
-                {"inputs": encoded_elem, "outputs": encoded_labels}
-            )
+            try:
+                targets = self.targets[i]
+                encoded_labels = [self.sentiments_vocabulary[t] for t in targets]
+                encoded_labels = torch.LongTensor(encoded_labels)
+                data_dict["outputs"] = encoded_labels
+            except:
+                pass
+
+            self.encoded_data.append(data_dict)
 
     def __len__(self) -> int:
         return len(self.encoded_data)

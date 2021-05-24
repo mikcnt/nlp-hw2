@@ -1,8 +1,16 @@
 import numpy as np
 from typing import List, Tuple, Dict
 
+import torch
+from torch.utils.data import DataLoader
+from torchtext.vocab import Vectors
+
+from stud.dataset import preprocess, ABSADataset
+from stud.pl_models import PlABSAModel
+from stud.utils import load_pickle, pad_collate
 from model import Model
 import random
+
 
 def build_model_b(device: str) -> Model:
     """
@@ -14,6 +22,7 @@ def build_model_b(device: str) -> Model:
             b: Aspect sentiment analysis.
     """
     return RandomBaseline()
+
 
 def build_model_ab(device: str) -> Model:
     """
@@ -27,7 +36,10 @@ def build_model_ab(device: str) -> Model:
 
     """
     # return RandomBaseline(mode='ab')
-    raise NotImplementedError
+    # raise NotImplementedError
+    print("AO?")
+    return StudentModel(device)
+
 
 def build_model_cd(device: str) -> Model:
     """
@@ -35,7 +47,7 @@ def build_model_cd(device: str) -> Model:
     Args:
         device: the model MUST be loaded on the indicated device (e.g. "cpu")
     Returns:
-        A Model instance that implements both aspect identification and sentiment analysis of the ABSA pipeline 
+        A Model instance that implements both aspect identification and sentiment analysis of the ABSA pipeline
         as well as Category identification and sentiment analysis.
             c: Category identification.
             d: Category sentiment analysis.
@@ -43,13 +55,14 @@ def build_model_cd(device: str) -> Model:
     # return RandomBaseline(mode='cd')
     raise NotImplementedError
 
+
 class RandomBaseline(Model):
 
     options_sent = [
-        ('positive', 793+1794),
-        ('negative', 701+638),
-        ('neutral',  365+507),
-        ('conflict', 39+72),
+        ("positive", 793 + 1794),
+        ("negative", 701 + 638),
+        ("neutral", 365 + 507),
+        ("conflict", 39 + 72),
     ]
 
     options = [
@@ -67,10 +80,10 @@ class RandomBaseline(Model):
     ]
 
     options_sent_cat = [
-        ('positive', 1801),
-        ('negative', 672),
-        ('neutral',  411),
-        ('conflict', 164),
+        ("positive", 1801),
+        ("negative", 672),
+        ("neutral", 411),
+        ("conflict", 164),
     ]
 
     options_cat = [
@@ -80,24 +93,28 @@ class RandomBaseline(Model):
         ("ambience", 355),
     ]
 
-    def __init__(self, mode = 'b'):
+    def __init__(self, mode="b"):
 
         self._options_sent = [option[0] for option in self.options_sent]
         self._weights_sent = np.array([option[1] for option in self.options_sent])
         self._weights_sent = self._weights_sent / self._weights_sent.sum()
 
-        if mode == 'ab':
+        if mode == "ab":
             self._options = [option[0] for option in self.options]
             self._weights = np.array([option[1] for option in self.options])
             self._weights = self._weights / self._weights.sum()
-        elif mode == 'cd':
+        elif mode == "cd":
             self._options_cat_n = [option[0] for option in self.options_cat_n]
             self._weights_cat_n = np.array([option[1] for option in self.options_cat_n])
             self._weights_cat_n = self._weights_cat_n / self._weights_cat_n.sum()
 
             self._options_sent_cat = [option[0] for option in self.options_sent_cat]
-            self._weights_sent_cat = np.array([option[1] for option in self.options_sent_cat])
-            self._weights_sent_cat = self._weights_sent_cat / self._weights_sent_cat.sum()
+            self._weights_sent_cat = np.array(
+                [option[1] for option in self.options_sent_cat]
+            )
+            self._weights_sent_cat = (
+                self._weights_sent_cat / self._weights_sent_cat.sum()
+            )
 
             self._options_cat = [option[0] for option in self.options_cat]
             self._weights_cat = np.array([option[1] for option in self.options_cat])
@@ -110,37 +127,87 @@ class RandomBaseline(Model):
         for sample in samples:
             pred_sample = {}
             words = None
-            if self.mode == 'ab':
+            if self.mode == "ab":
                 n_preds = np.random.choice(self._options, 1, p=self._weights)[0]
                 if n_preds > 0 and len(sample["text"].split(" ")) > n_preds:
                     words = random.sample(sample["text"].split(" "), n_preds)
                 elif n_preds > 0:
                     words = sample["text"].split(" ")
-            elif self.mode == 'b':
+            elif self.mode == "b":
                 if len(sample["targets"]) > 0:
                     words = [word[1] for word in sample["targets"]]
             if words:
-                pred_sample["targets"] = [(word, str(np.random.choice(self._options_sent, 1, p=self._weights_sent)[0])) for word in words]
-            else: 
+                pred_sample["targets"] = [
+                    (
+                        word,
+                        str(
+                            np.random.choice(
+                                self._options_sent, 1, p=self._weights_sent
+                            )[0]
+                        ),
+                    )
+                    for word in words
+                ]
+            else:
                 pred_sample["targets"] = []
-            if self.mode == 'cd':
-                n_preds = np.random.choice(self._options_cat_n, 1, p=self._weights_cat_n)[0]
+            if self.mode == "cd":
+                n_preds = np.random.choice(
+                    self._options_cat_n, 1, p=self._weights_cat_n
+                )[0]
                 pred_sample["categories"] = []
                 for i in range(n_preds):
-                    category = str(np.random.choice(self._options_cat, 1, p=self._weights_cat)[0]) 
-                    sentiment = str(np.random.choice(self._options_sent_cat, 1, p=self._weights_sent_cat)[0]) 
+                    category = str(
+                        np.random.choice(self._options_cat, 1, p=self._weights_cat)[0]
+                    )
+                    sentiment = str(
+                        np.random.choice(
+                            self._options_sent_cat, 1, p=self._weights_sent_cat
+                        )[0]
+                    )
                     pred_sample["categories"].append((category, sentiment))
             preds.append(pred_sample)
         return preds
 
 
+import os
+
+
 class StudentModel(Model):
-    
+    def __init__(self, device):
+        path = "../model/last.ckpt"
+        vocabulary_path = "../model/vocabulary.pkl"
+        sentiments_vocabulary_path = "../model/sentiments_vocabulary.pkl"
+        embeddings_path = "../model/glove.6B.300d.txt"
+        cache_path = "../model/.vector_cache/"
+        self.vocabulary = load_pickle(vocabulary_path)
+        self.sentiments_vocabulary = load_pickle(sentiments_vocabulary_path)
+        vocabularies = {
+            "vocabulary": self.vocabulary,
+            "sentiments_vocabulary": self.sentiments_vocabulary,
+        }
+        vectors = Vectors(embeddings_path, cache=cache_path)
+        pretrained_embeddings = torch.randn(len(self.vocabulary), vectors.dim)
+        for i, w in enumerate(self.vocabulary.itos):
+            if w in vectors.stoi:
+                vec = vectors.get_vecs_by_tokens(w)
+                pretrained_embeddings[i] = vec
+        pretrained_embeddings[self.vocabulary["<pad>"]] = torch.zeros(vectors.dim)
+        self.model = PlABSAModel.load_from_checkpoint(
+            path,
+            map_location=device,
+            vocabularies=vocabularies,
+            embeddings=pretrained_embeddings,
+        )
+        print("loaded pretrained model")
+        self.model.eval()
+
+        pass
+
     # STUDENT: construct here your model
     # this class should be loading your weights and vocabulary
 
     def predict(self, samples: List[Dict]) -> List[Dict]:
-        '''
+        """
         --> !!! STUDENT: implement here your predict function !!! <--
         Args:
             - If you are doing model_b (ie. aspect sentiment analysis):
@@ -187,5 +254,17 @@ class StudentModel(Model):
                             "categories": [("service", "positive"), ("food", "positive")]
                         }
                     ]
-        '''
-        pass
+        """
+        data = preprocess(samples, preprocess_targets=False)
+        data = ABSADataset(
+            data,
+            self.vocabulary,
+            self.sentiments_vocabulary,
+        )
+        loader = DataLoader(data, batch_size=1, shuffle=False, collate_fn=pad_collate)
+        all_outputs = []
+        for batch in loader:
+            output = self.model.forward_processed(batch)
+            all_outputs += output
+        print("all_outputs", all_outputs)
+        return all_outputs

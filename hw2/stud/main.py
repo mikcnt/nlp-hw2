@@ -3,13 +3,15 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from torchtext.vocab import Vectors
-from hw2.stud.dataset import (
+from stud.dataset import (
     read_data,
     preprocess,
     build_vocab,
     DataModuleABSA,
 )
-from hw2.stud.pl_models import PlABSAModel
+
+from stud.pl_models import PlABSAModel
+from stud.utils import save_pickle
 
 if __name__ == "__main__":
     # set seeds for reproducibility
@@ -26,8 +28,13 @@ if __name__ == "__main__":
     # build vocabularies (for both sentences and labels)
     vocabulary = build_vocab(train_data["sentences"], specials=["<pad>", "<unk>"])
     sentiments_vocabulary = build_vocab(train_data["targets"], specials=["<pad>"])
+    # save vocabularies to file
+    save_pickle(vocabulary, "../../model/vocabulary.pkl")
+    save_pickle(sentiments_vocabulary, "../../model/sentiments_vocabulary.pkl")
     # load pretrained word embeddings
-    vectors = Vectors("../../model/glove.6B.300d.txt")
+    vectors = Vectors(
+        "../../model/glove.6B.300d.txt", cache="../../model/.vector_cache/"
+    )
     pretrained_embeddings = torch.randn(len(vocabulary), vectors.dim)
     for i, w in enumerate(vocabulary.itos):
         if w in vectors.stoi:
@@ -63,7 +70,7 @@ if __name__ == "__main__":
     # callbacks
     # early stopping
     early_stop_callback = EarlyStopping(
-        monitor="f1_val", min_delta=0.00, patience=10, verbose=False, mode="max"
+        monitor="f1_val", min_delta=0.00, patience=100, verbose=False, mode="max"
     )
     # checkpoints
     checkpoint_callback = ModelCheckpoint(
@@ -71,13 +78,14 @@ if __name__ == "__main__":
         filename="{epoch}",
         monitor="f1_val",
         save_top_k=1,
+        save_last=True,
     )
 
     # define trainer and start training
     trainer = pl.Trainer(
         gpus=1,
         val_check_interval=1.0,
-        max_epochs=100,
+        max_epochs=50,
         callbacks=[early_stop_callback, checkpoint_callback],
     )
     trainer.fit(model, datamodule=data_module)
