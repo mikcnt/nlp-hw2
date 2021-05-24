@@ -1,5 +1,7 @@
 import torch
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from torchtext.vocab import Vectors
 from hw2.stud.dataset import (
     read_data,
@@ -7,7 +9,7 @@ from hw2.stud.dataset import (
     build_vocab,
     DataModuleABSA,
 )
-from pl_models import PlABSAModel
+from hw2.stud.pl_models import PlABSAModel
 
 if __name__ == "__main__":
     # set seeds for reproducibility
@@ -33,6 +35,10 @@ if __name__ == "__main__":
             pretrained_embeddings[i] = vec
     pretrained_embeddings[vocabulary["<pad>"]] = torch.zeros(vectors.dim)
     # define hyper parameters
+    raw_data = {
+        "train": train_raw_data,
+        "dev": dev_raw_data,
+    }
     hparams = {
         "vocab_size": len(vocabulary),
         "hidden_dim": 128,
@@ -41,12 +47,10 @@ if __name__ == "__main__":
         "bidirectional": False,
         "num_layers": 1,
         "dropout": 0.5,
-        "train_raw_data": train_raw_data,
-        "dev_raw_data": dev_raw_data,
-        "vocabulary": vocabulary,
-        "sentiments_vocabulary": sentiments_vocabulary,
         "lr": 0.001,
         "weight_decay": 0.0,
+        "vocabulary": vocabulary,
+        "sentiments_vocabulary": sentiments_vocabulary,
     }
     # load data
     data_module = DataModuleABSA(
@@ -56,7 +60,26 @@ if __name__ == "__main__":
         sentiments_vocabulary,
     )
     # define model
-    model = PlABSAModel(pretrained_embeddings, hparams)
+    model = PlABSAModel(pretrained_embeddings, raw_data, hparams)
+
+    # callbacks
+    # early stopping
+    early_stop_callback = EarlyStopping(
+        monitor="f1_val", min_delta=0.00, patience=10, verbose=False, mode="max"
+    )
+    # checkpoints
+    checkpoint_callback = ModelCheckpoint(
+        dirpath="./saved_checkpoints",
+        filename="{epoch}",
+        monitor="f1_val",
+        save_top_k=1,
+    )
+
     # define trainer and start training
-    trainer = pl.Trainer(gpus=1, val_check_interval=1.0, max_epochs=100)
+    trainer = pl.Trainer(
+        gpus=1,
+        val_check_interval=1.0,
+        max_epochs=100,
+        callbacks=[early_stop_callback, checkpoint_callback],
+    )
     trainer.fit(model, datamodule=data_module)

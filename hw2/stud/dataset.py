@@ -10,6 +10,8 @@ from nltk.tokenize import word_tokenize
 from torch.utils.data import Dataset, DataLoader
 from torchtext.vocab import Vocab
 
+from hw2.stud.utils import pad_collate
+
 nltk.download("punkt")
 
 
@@ -108,26 +110,13 @@ class ABSADataset(Dataset):
             # encode sentences and targets
             encoded_elem = self.encode_text(sentence)
             encoded_labels = [self.sentiments_vocabulary[t] for t in targets]
-            # pad sequences
-            encoded_elem = torch.LongTensor(
-                self.pad_sequence(encoded_elem, pad_token=self.vocabulary["<pad>"])
-            )
-            encoded_labels = torch.LongTensor(
-                self.pad_sequence(
-                    encoded_labels, pad_token=self.sentiments_vocabulary["<pad>"]
-                )
-            )
+
+            encoded_elem = torch.LongTensor(encoded_elem)
+            encoded_labels = torch.LongTensor(encoded_labels)
+
             self.encoded_data.append(
                 {"inputs": encoded_elem, "outputs": encoded_labels}
             )
-
-    def pad_sequence(self, sequence, pad_token: int) -> List[int]:
-        padded_sequence = [pad_token] * self.max_len
-        for i, tk_idx in enumerate(sequence):
-            if i >= self.max_len:
-                break
-            padded_sequence[i] = tk_idx
-        return padded_sequence
 
     def __len__(self) -> int:
         return len(self.encoded_data)
@@ -164,7 +153,11 @@ class DataModuleABSA(pl.LightningDataModule):
         )
 
     def train_dataloader(self):
-        return DataLoader(self.trainset, batch_size=128, shuffle=True)
+        return DataLoader(
+            self.trainset, batch_size=128, shuffle=True, collate_fn=pad_collate
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.devset, batch_size=128, shuffle=False)
+        return DataLoader(
+            self.devset, batch_size=128, shuffle=False, collate_fn=pad_collate
+        )

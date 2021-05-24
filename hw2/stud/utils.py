@@ -1,49 +1,26 @@
+import numpy as np
 import torch
+from torch.nn.utils.rnn import pad_sequence
 from torchtext.vocab import Vocab
 from typing import *
 
 
-class TokenToSentimentsConverter(object):
-    def begin_sentiment(
-        self, tokens: List[Tuple[str, str]], token: str, sentiment: str
-    ) -> None:
-        tokens.append((token, sentiment))
+def pad_collate(batch):
+    xx = [x["inputs"] for x in batch]
+    yy = [x["outputs"] for x in batch]
+    # lengths of inputs == lenghts of outputs
+    lengths = [len(x) for x in xx]
 
-    def inside_sentiment(
-        self, tokens: List[Tuple[str, str]], token: str, sentiment: str
-    ) -> None:
-        if len(tokens) == 0:
-            self.begin_sentiment(tokens, token, sentiment)
-            return
-        last_token, last_sentiment = tokens[-1]
-        if last_sentiment != sentiment:
-            self.begin_sentiment(tokens, token, sentiment)
-        else:
-            tokens[-1] = (f"{last_token} {token}", last_sentiment)
+    xx_pad = pad_sequence(xx, batch_first=True, padding_value=0)
+    yy_pad = pad_sequence(yy, batch_first=True, padding_value=0)
 
-    def pick_sentiment(
-        self, tokens: List[Tuple[str, str]], token: str, sentiment: str
-    ) -> None:
-        if sentiment == "0":
-            self.begin_sentiment(tokens, token, sentiment)
-        elif sentiment.startswith("B-"):
-            self.begin_sentiment(tokens, token, sentiment[2:])
-        elif sentiment.startswith("I-"):
-            self.inside_sentiment(tokens, token, sentiment[2:])
+    batch = {
+        "inputs": xx_pad,
+        "outputs": yy_pad,
+        "lengths": lengths,
+    }
 
-    def compute_sentiments(
-        self, input_tokens: List[str], output_sentiments: List[str]
-    ) -> Dict[str, List[Tuple[str, str]]]:
-        tokens2sentiments = []
-        for token, sentiment in zip(input_tokens, output_sentiments):
-            self.pick_sentiment(tokens2sentiments, token, sentiment)
-        return {
-            "targets": [
-                (tk, sentiment)
-                for tk, sentiment in tokens2sentiments
-                if sentiment != "0"
-            ]
-        }
+    return batch
 
 
 def evaluate_extraction(samples, predictions_b):
@@ -60,7 +37,11 @@ def evaluate_extraction(samples, predictions_b):
         scores["tp"] / (scores["tp"] + scores["fp"]) if scores["fp"] != 0 else 1.0
     )
     recall = scores["tp"] / (scores["tp"] + scores["fn"]) if scores["fn"] != 0 else 1.0
-    f1 = 2 * precision * recall / (precision + recall) if precision or recall else 0.0
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if precision + recall != 0
+        else np.nan
+    )
     return f1
 
 

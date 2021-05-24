@@ -23,6 +23,7 @@ hw2/stud/checkpoints/*
 !hw2/stud/checkpoints/.placeholder
 
 hw2/stud/lightning_logs/
+hw2/stud/saved_checkpoints/
 
 logs/*
 !logs/.placeholder
