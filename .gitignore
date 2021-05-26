@@ -11,6 +11,7 @@ wandb
 # file types
 *.pkl
 *.pth
+*.ckpt
 *.aux
 *.blg
 *.log
@@ -30,5 +31,4 @@ logs/*
 .vector_cache
 
 # embeddings
-
 glove.*
