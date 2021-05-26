@@ -5,7 +5,7 @@ import torch
 import pytorch_lightning as pl
 from collections import Counter
 from tqdm import tqdm
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Any
 from nltk.tokenize import word_tokenize
 from torch.utils.data import Dataset, DataLoader
 from torchtext.vocab import Vocab
@@ -23,7 +23,7 @@ def tokens_position(sentence: str, target_char_positions: List[int]) -> List[int
     return list(range(s_token, s_token + n_tokens))
 
 
-def read_data(path: str) -> Tuple[list, list, list]:
+def read_data(path: str) -> List[Dict[str, Any]]:
     """Read data from json file."""
     with open(path) as f:
         raw_data = json.load(f)
@@ -80,11 +80,14 @@ def dataset_max_len(sentences: List[List[str]]) -> int:
 class ABSADataset(Dataset):
     def __init__(
         self,
-        processed_data: Dict[str, List[List[str]]],
+        raw_data: List[Dict[str, Any]],
         vocabulary: Vocab,
         sentiments_vocabulary: Vocab,
+        preprocess_targets=True,
     ) -> None:
         super(ABSADataset, self).__init__()
+        self.raw_data = raw_data
+        processed_data = preprocess(raw_data, preprocess_targets)
         self.sentences = processed_data["sentences"]
         self.targets = processed_data["targets"]
         self.encoded_data = []
@@ -109,6 +112,7 @@ class ABSADataset(Dataset):
             encoded_elem = self.encode_text(sentence)
             encoded_elem = torch.LongTensor(encoded_elem)
             data_dict["inputs"] = encoded_elem
+            data_dict["raw"] = self.raw_data[i]
 
             try:
                 targets = self.targets[i]
@@ -123,7 +127,7 @@ class ABSADataset(Dataset):
     def __len__(self) -> int:
         return len(self.encoded_data)
 
-    def __getitem__(self, index: int) -> Tuple[torch.LongTensor, torch.LongTensor]:
+    def __getitem__(self, index: int) -> Dict[str, torch.LongTensor]:
         return self.encoded_data[index]
 
 

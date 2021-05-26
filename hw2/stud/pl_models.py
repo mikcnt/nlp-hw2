@@ -2,9 +2,14 @@ from typing import *
 import torch
 import pytorch_lightning as pl
 from torch import nn, optim
+from torchmetrics import Accuracy
 from torchtext.vocab import Vocab
 
-from stud.metrics import F1SentimentExtraction, TokenToSentimentsConverter
+from stud.metrics import (
+    F1SentimentExtraction,
+    TokenToSentimentsConverter,
+    F1SentimentEvaluation,
+)
 from stud.models import ABSAModel
 
 
@@ -31,6 +36,9 @@ class PlABSAModel(pl.LightningModule):
             vocabulary=vocabulary,
             sentiments_vocabulary=sentiments_vocabulary,
         )
+        self.f1_evaluation = F1SentimentEvaluation(
+            vocabulary=vocabulary, sentiments_vocabulary=sentiments_vocabulary
+        )
         self.model = ABSAModel(self.hparams, embeddings)
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -49,10 +57,13 @@ class PlABSAModel(pl.LightningModule):
         )
         return processed_output
 
-    def step(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+    def step(
+        self, batch: Dict[str, torch.Tensor], compute_f1=False
+    ) -> Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor]:
         sentences = batch["inputs"]
         lengths = batch["lengths"]
         labels = batch["outputs"]
+        raw_data = batch["raw"]
         # We receive one batch of data and perform a forward pass:
         logits = self.model(sentences, lengths)
         predictions = torch.argmax(logits, -1)
@@ -60,18 +71,26 @@ class PlABSAModel(pl.LightningModule):
         logits = logits.view(-1, logits.shape[-1])
         # compute loss and f1 score
         loss = self.loss_function(logits, labels.view(-1))
-        f1_score = self.f1_extraction(sentences, predictions, labels, lengths)
-        return loss, f1_score
+        if compute_f1:
+            f1_extraction = self.f1_extraction(
+                sentences, predictions, raw_data, lengths
+            )
+            f1_evaluation = self.f1_evaluation(
+                sentences, predictions, raw_data, lengths
+            )
+            return loss, f1_extraction, f1_evaluation
+        else:
+            return loss
 
     def training_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: Optional[int]
     ) -> torch.Tensor:
-        train_loss, train_f1_score = self.step(batch)
+        train_loss = self.step(batch)
         # Log loss and f1 score
         self.log_dict(
             {
                 "train_loss": train_loss,
-                "f1_train": train_f1_score,
+                # "f1_train": train_f1_score,
             },
             prog_bar=True,
         )
@@ -81,16 +100,29 @@ class PlABSAModel(pl.LightningModule):
 
     def validation_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: Optional[int]
-    ) -> None:
-        val_loss, val_f1_score = self.step(batch)
+    ) -> Tuple[Any, Any]:
+        val_loss, f1_extraction, f1_evaluation = self.step(batch, compute_f1=True)
         # Log loss and f1 score
         self.log_dict(
             {
                 "val_loss": val_loss,
-                "f1_val": val_f1_score,
+                # "f1_val": val_f1_score,
             },
             prog_bar=True,
+            on_step=False,
+            on_epoch=True,
         )
+        return f1_extraction, f1_evaluation
+
+    def validation_epoch_end(self, outputs):
+        f1_extraction = self.f1_extraction.compute()
+        f1_evaluation = self.f1_evaluation.compute()
+        self.log_dict(
+            {"f1_extraction": f1_extraction, "f1_evaluation": f1_evaluation},
+            prog_bar=True,
+        )
+        self.f1_extraction.reset()
+        self.f1_evaluation.reset()
 
     def configure_optimizers(self) -> optim.Optimizer:
         return optim.Adam(

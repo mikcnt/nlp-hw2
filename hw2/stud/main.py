@@ -59,8 +59,8 @@ if __name__ == "__main__":
     }
     # load data
     data_module = DataModuleABSA(
-        train_data,
-        dev_data,
+        train_raw_data,
+        dev_raw_data,
         vocabulary,
         sentiments_vocabulary,
     )
@@ -70,22 +70,24 @@ if __name__ == "__main__":
     # callbacks
     # early stopping
     early_stop_callback = EarlyStopping(
-        monitor="f1_val", min_delta=0.00, patience=100, verbose=False, mode="max"
+        monitor="f1_extraction", min_delta=0.00, patience=10, verbose=False, mode="max"
     )
     # checkpoints
     checkpoint_callback = ModelCheckpoint(
         dirpath="./saved_checkpoints",
-        filename="{epoch}",
-        monitor="f1_val",
+        filename="{epoch}_{f1_extraction:.4f}_{f1_evaluation:.4f}",
+        monitor="f1_extraction",
         save_top_k=1,
-        save_last=True,
+        save_last=False,
+        mode="max",
     )
 
     # define trainer and start training
     trainer = pl.Trainer(
         gpus=1,
         val_check_interval=1.0,
-        max_epochs=50,
+        max_epochs=20,
         callbacks=[early_stop_callback, checkpoint_callback],
+        num_sanity_val_steps=0,
     )
     trainer.fit(model, datamodule=data_module)

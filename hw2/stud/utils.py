@@ -37,6 +37,7 @@ def pad_collate(batch):
         "inputs": xx_pad,
         "outputs": yy_pad,
         "lengths": lengths,
+        "raw": [x["raw"] for x in batch],
     }
 
     return batch
@@ -52,16 +53,11 @@ def evaluate_extraction(samples, predictions_b):
         scores["fp"] += len(pred_terms - gt_terms)
         scores["fn"] += len(gt_terms - pred_terms)
 
-    precision = (
-        scores["tp"] / (scores["tp"] + scores["fp"]) if scores["fp"] != 0 else 1.0
-    )
-    recall = scores["tp"] / (scores["tp"] + scores["fn"]) if scores["fn"] != 0 else 1.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if precision + recall != 0
-        else np.nan
-    )
-    return f1
+    precision = 100 * scores["tp"] / (scores["tp"] + scores["fp"])
+    recall = 100 * scores["tp"] / (scores["tp"] + scores["fn"])
+    f1 = 2 * precision * recall / (precision + recall)
+
+    print(f"Aspect Extraction Evaluation")
 
 
 def evaluate_sentiment(samples, predictions_b, mode="Aspect Sentiment"):

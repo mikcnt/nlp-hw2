@@ -35,9 +35,8 @@ def build_model_ab(device: str) -> Model:
             b: Aspect sentiment analysis.
 
     """
-    # return RandomBaseline(mode='ab')
+    # return RandomBaseline(mode="ab")
     # raise NotImplementedError
-    print("AO?")
     return StudentModel(device)
 
 
@@ -169,17 +168,15 @@ class RandomBaseline(Model):
         return preds
 
 
-import os
-
-
 class StudentModel(Model):
     def __init__(self, device):
-        path = "../model/last.ckpt"
-        vocabulary_path = "../model/vocabulary.pkl"
-        sentiments_vocabulary_path = "../model/sentiments_vocabulary.pkl"
-        embeddings_path = "../model/glove.6B.300d.txt"
-        cache_path = "../model/.vector_cache/"
+        path = "model/epoch=19_f1_val=14.8297.ckpt"
+        vocabulary_path = "model/vocabulary.pkl"
+        sentiments_vocabulary_path = "model/sentiments_vocabulary.pkl"
+        embeddings_path = "model/glove.6B.300d.txt"
+        cache_path = "model/.vector_cache/"
         self.vocabulary = load_pickle(vocabulary_path)
+
         self.sentiments_vocabulary = load_pickle(sentiments_vocabulary_path)
         vocabularies = {
             "vocabulary": self.vocabulary,
@@ -198,10 +195,7 @@ class StudentModel(Model):
             vocabularies=vocabularies,
             embeddings=pretrained_embeddings,
         )
-        print("loaded pretrained model")
         self.model.eval()
-
-        pass
 
     # STUDENT: construct here your model
     # this class should be loading your weights and vocabulary
@@ -255,16 +249,16 @@ class StudentModel(Model):
                         }
                     ]
         """
-        data = preprocess(samples, preprocess_targets=False)
+        # data = preprocess(samples, preprocess_targets=False)
         data = ABSADataset(
-            data,
+            samples,
             self.vocabulary,
             self.sentiments_vocabulary,
+            preprocess_targets=False,
         )
         loader = DataLoader(data, batch_size=1, shuffle=False, collate_fn=pad_collate)
         all_outputs = []
         for batch in loader:
             output = self.model.forward_processed(batch)
             all_outputs += output
-        print("all_outputs", all_outputs)
         return all_outputs
