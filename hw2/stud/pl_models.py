@@ -2,15 +2,15 @@ from typing import *
 import torch
 import pytorch_lightning as pl
 from torch import nn, optim
-from torchmetrics import Accuracy
 from torchtext.vocab import Vocab
+from transformers import BertTokenizer
 
 from stud.metrics import (
     F1SentimentExtraction,
     TokenToSentimentsConverter,
     F1SentimentEvaluation,
 )
-from stud.models import ABSAModel
+from stud.models import ABSAModel, ABSABert
 
 
 class PlABSAModel(pl.LightningModule):
@@ -32,14 +32,26 @@ class PlABSAModel(pl.LightningModule):
         self.loss_function = nn.CrossEntropyLoss(
             ignore_index=sentiments_vocabulary["<pad>"]
         )
+        tokenizer = (
+            BertTokenizer.from_pretrained("bert-base-cased")
+            if self.hparams.use_bert
+            else None
+        )
         self.f1_extraction = F1SentimentExtraction(
             vocabulary=vocabulary,
             sentiments_vocabulary=sentiments_vocabulary,
+            tokenizer=tokenizer,
         )
         self.f1_evaluation = F1SentimentEvaluation(
-            vocabulary=vocabulary, sentiments_vocabulary=sentiments_vocabulary
+            vocabulary=vocabulary,
+            sentiments_vocabulary=sentiments_vocabulary,
+            tokenizer=tokenizer,
         )
-        self.model = ABSAModel(self.hparams, embeddings)
+        self.model = (
+            ABSAModel(self.hparams, embeddings)
+            if not self.hparams.use_bert
+            else ABSABert(self.hparams)
+        )
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         sentences = batch["inputs"]

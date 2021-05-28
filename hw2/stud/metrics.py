@@ -3,11 +3,19 @@ import torch
 from torchmetrics import Metric
 from typing import *
 
+from transformers import BertTokenizer
+
 
 class TokenToSentimentsConverter(object):
-    def __init__(self, vocabulary, sentiments_vocabulary):
+    def __init__(
+        self,
+        vocabulary,
+        sentiments_vocabulary,
+        tokenizer: Optional[BertTokenizer] = None,
+    ):
         self.vocabulary = vocabulary
         self.sentiments_vocabulary = sentiments_vocabulary
+        self.tokenizer = tokenizer
 
     def begin_sentiment(
         self, tokens: List[Tuple[str, str]], token: str, sentiment: str
@@ -60,9 +68,16 @@ class TokenToSentimentsConverter(object):
             to_process_list[i] = to_process_list[i][:length]
 
         # extract tokens and associated sentiments
-        tokens = [
-            [self.vocabulary.itos[x] for x in sentence] for sentence in sentences_list
-        ]
+        if self.tokenizer is None:
+            tokens = [
+                [self.vocabulary.itos[x] for x in sentence]
+                for sentence in sentences_list
+            ]
+        else:
+            tokens = [
+                self.tokenizer.convert_ids_to_tokens(sentence)
+                for sentence in sentences_list
+            ]
 
         # convert indexes to tokens + IOB format sentiments
         processed_iob_sentiments = [
@@ -80,12 +95,17 @@ class TokenToSentimentsConverter(object):
 
 
 class F1SentimentExtraction(Metric):
-    def __init__(self, vocabulary, sentiments_vocabulary, dist_sync_on_step=False):
-        super().__init__(dist_sync_on_step=dist_sync_on_step)
+    def __init__(
+        self,
+        vocabulary,
+        sentiments_vocabulary,
+        tokenizer=None,
+    ):
+        super().__init__(dist_sync_on_step=False)
         self.vocabulary = vocabulary
         self.sentiments_vocabulary = sentiments_vocabulary
         self.sentiments_converter = TokenToSentimentsConverter(
-            vocabulary, sentiments_vocabulary
+            vocabulary, sentiments_vocabulary, tokenizer
         )
         self.add_state("tp", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self.add_state("fp", default=torch.tensor(0.0), dist_reduce_fx="sum")
@@ -142,13 +162,14 @@ class F1SentimentEvaluation(Metric):
         vocabulary,
         sentiments_vocabulary,
         mode="Aspect Sentiment",
-        dist_sync_on_step=False,
+        tokenizer=None,
     ):
-        super().__init__(dist_sync_on_step=dist_sync_on_step)
+        super().__init__(dist_sync_on_step=False)
         self.vocabulary = vocabulary
         self.sentiments_vocabulary = sentiments_vocabulary
+        self.tokenizer = tokenizer
         self.sentiments_converter = TokenToSentimentsConverter(
-            vocabulary, sentiments_vocabulary
+            vocabulary, sentiments_vocabulary, tokenizer=tokenizer
         )
         self.mode = mode
         if mode == "Category Extraction":

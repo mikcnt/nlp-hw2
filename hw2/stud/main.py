@@ -14,6 +14,8 @@ from stud.pl_models import PlABSAModel
 from stud.utils import save_pickle
 
 if __name__ == "__main__":
+    # --------- NECESSARY BOILER ---------
+    USE_BERT = True
     # set seeds for reproducibility
     pl.seed_everything(42)
     # paths
@@ -22,15 +24,23 @@ if __name__ == "__main__":
     # read raw data
     train_raw_data = read_data(train_path)
     dev_raw_data = read_data(dev_path)
+
+    # --------- DATA ---------
     # preprocess data
-    train_data = preprocess(train_raw_data)
-    dev_data = preprocess(dev_raw_data)
+    train_data = preprocess(train_raw_data, use_bert=USE_BERT)
+    dev_data = preprocess(dev_raw_data, use_bert=USE_BERT)
     # build vocabularies (for both sentences and labels)
     vocabulary = build_vocab(train_data["sentences"], specials=["<pad>", "<unk>"])
     sentiments_vocabulary = build_vocab(train_data["targets"], specials=["<pad>"])
+    vocabularies = {
+        "vocabulary": vocabulary,
+        "sentiments_vocabulary": sentiments_vocabulary,
+    }
     # save vocabularies to file
     save_pickle(vocabulary, "../../model/vocabulary.pkl")
     save_pickle(sentiments_vocabulary, "../../model/sentiments_vocabulary.pkl")
+
+    # --------- EMBEDDINGS ---------
     # load pretrained word embeddings
     vectors = Vectors(
         "../../model/glove.6B.300d.txt", cache="../../model/.vector_cache/"
@@ -41,11 +51,8 @@ if __name__ == "__main__":
             vec = vectors.get_vecs_by_tokens(w)
             pretrained_embeddings[i] = vec
     pretrained_embeddings[vocabulary["<pad>"]] = torch.zeros(vectors.dim)
-    # define hyper parameters
-    vocabularies = {
-        "vocabulary": vocabulary,
-        "sentiments_vocabulary": sentiments_vocabulary,
-    }
+
+    # --------- HYPERPARAMETERS ---------
     hparams = {
         "vocab_size": len(vocabulary),
         "hidden_dim": 128,
@@ -56,23 +63,25 @@ if __name__ == "__main__":
         "dropout": 0.5,
         "lr": 0.001,
         "weight_decay": 0.0,
+        "use_bert": USE_BERT,
     }
+
+    # --------- TRAINER ---------
     # load data
     data_module = DataModuleABSA(
         train_raw_data,
         dev_raw_data,
         vocabulary,
         sentiments_vocabulary,
+        use_bert=USE_BERT,
     )
     # define model
     model = PlABSAModel(hparams, vocabularies, pretrained_embeddings)
 
     # callbacks
-    # early stopping
     early_stop_callback = EarlyStopping(
         monitor="f1_extraction", min_delta=0.00, patience=10, verbose=False, mode="max"
     )
-    # checkpoints
     checkpoint_callback = ModelCheckpoint(
         dirpath="./saved_checkpoints",
         filename="{epoch}_{f1_extraction:.4f}_{f1_evaluation:.4f}",
@@ -82,7 +91,7 @@ if __name__ == "__main__":
         mode="max",
     )
 
-    # define trainer and start training
+    # define trainer and train
     trainer = pl.Trainer(
         gpus=1,
         val_check_interval=1.0,
