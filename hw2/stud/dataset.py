@@ -4,6 +4,8 @@ import json
 import torch
 import pytorch_lightning as pl
 from collections import Counter
+
+from nltk import TreebankWordTokenizer
 from tqdm import tqdm
 from typing import List, Tuple, Dict, Any, Optional
 from nltk.tokenize import word_tokenize
@@ -14,24 +16,33 @@ from transformers import BertTokenizer
 
 # set up tokenizers
 nltk.download("punkt")
-BERT_MODEL_NAME = "bert-base-cased"
-bert_tokenizer = BertTokenizer.from_pretrained(BERT_MODEL_NAME)
 
 
-def tokenize(sentence, use_bert=False):
-    if use_bert:
-        return bert_tokenizer.tokenize(sentence)
-    else:
-        return word_tokenize(sentence)
+# def tokenize(sentence, use_bert=False):
+#     if use_bert:
+#         return bert_tokenizer.tokenize(sentence)
+#     else:
+#         return word_tokenize(sentence)
 
 
 def tokens_position(
-    sentence: str, target_char_positions: List[int], use_bert=False
+    sentence: str,
+    target_char_positions: List[int],
+    tokenizer: Optional[BertTokenizer] = None,
 ) -> List[int]:
     """Extract tokens positions from position in string."""
     s_pos, e_pos = target_char_positions
-    n_tokens = len(tokenize(sentence[s_pos:e_pos], use_bert=use_bert))
-    s_token = len(re.findall(r" +", sentence[:s_pos]))
+    tokens_between_positions = (
+        tokenizer.tokenize(sentence[s_pos:e_pos])
+        if tokenizer is not None
+        else TreebankWordTokenizer().tokenize(sentence[s_pos:e_pos])
+    )
+    n_tokens = len(tokens_between_positions)
+    s_token = (
+        len(TreebankWordTokenizer().tokenize(sentence[:s_pos]))
+        if tokenizer is None
+        else len(tokenizer.tokenize(sentence[:s_pos]))
+    )
     return list(range(s_token, s_token + n_tokens))
 
 
@@ -42,7 +53,9 @@ def read_data(path: str) -> List[Dict[str, Any]]:
     return raw_data
 
 
-def preprocess(raw_data, use_bert=False, preprocess_targets=True):
+def preprocess(
+    raw_data, tokenizer: Optional[BertTokenizer] = None, preprocess_targets=True
+):
     # split data in 2 + 1 lists (3 for restaurants data, 2 for laptops data):
     # for both datasets: sentences (i.e., raw text), targets (i.e., position range, instance, sentiment),
     # for restaurant dataset: categories (i.e., category, sentiment)
@@ -51,7 +64,11 @@ def preprocess(raw_data, use_bert=False, preprocess_targets=True):
     for d in raw_data:
         # extract tokens
         text = d["text"]
-        tokens = tokenize(text, use_bert=use_bert)
+        tokens = (
+            tokenizer.tokenize(text)
+            if tokenizer is not None
+            else TreebankWordTokenizer().tokenize(text)
+        )
         processed_data["sentences"].append(tokens)
         if preprocess_targets:
             # possible sentiments are: positive, negative, neutral, conflict
@@ -60,7 +77,9 @@ def preprocess(raw_data, use_bert=False, preprocess_targets=True):
             # `O` means that no sentiment is involved with that the token
             sentiments = ["O"] * len(tokens)
             for start_end, instance, sentiment in d["targets"]:
-                sentiment_positions = tokens_position(text, start_end)
+                sentiment_positions = tokens_position(
+                    text, start_end, tokenizer=tokenizer
+                )
                 for i, s in enumerate(sentiment_positions):
                     if i == 0:
                         sentiments[s] = "B-" + sentiment
@@ -96,14 +115,14 @@ class ABSADataset(Dataset):
         vocabulary: Vocab,
         sentiments_vocabulary: Vocab,
         preprocess_targets: bool = True,
-        use_bert: bool = False,
+        tokenizer: Optional[BertTokenizer] = None,
     ) -> None:
         super(ABSADataset, self).__init__()
         self.raw_data = raw_data
         self.preprocess_targets = preprocess_targets
-        self.use_bert = use_bert
+        self.tokenizer = tokenizer
         processed_data = preprocess(
-            raw_data, use_bert=use_bert, preprocess_targets=preprocess_targets
+            raw_data, tokenizer=tokenizer, preprocess_targets=preprocess_targets
         )
         self.sentences = processed_data["sentences"]
         self.targets = processed_data["targets"]
@@ -113,8 +132,8 @@ class ABSADataset(Dataset):
         self.index_dataset()
 
     def encode_text(self, sentence: List[str]) -> List[int]:
-        if self.use_bert:
-            indices = bert_tokenizer.convert_tokens_to_ids(sentence)
+        if self.tokenizer is not None:
+            indices = self.tokenizer.convert_tokens_to_ids(sentence)
         else:
             indices = []
             for w in sentence:
@@ -152,7 +171,7 @@ class DataModuleABSA(pl.LightningDataModule):
         dev_data,
         vocabulary,
         sentiments_vocabulary,
-        use_bert=False,
+        tokenizer=None,
     ):
 
         super().__init__()
@@ -160,20 +179,20 @@ class DataModuleABSA(pl.LightningDataModule):
         self.dev_data = dev_data
         self.vocabulary = vocabulary
         self.sentiments_vocabulary = sentiments_vocabulary
-        self.use_bert = use_bert
+        self.tokenizer = tokenizer
 
     def setup(self, stage=None):
         self.trainset = ABSADataset(
             self.train_data,
             self.vocabulary,
             self.sentiments_vocabulary,
-            use_bert=self.use_bert,
+            tokenizer=self.tokenizer,
         )
         self.devset = ABSADataset(
             self.dev_data,
             self.vocabulary,
             self.sentiments_vocabulary,
-            use_bert=self.use_bert,
+            tokenizer=self.tokenizer,
         )
 
     def train_dataloader(self):

@@ -3,7 +3,7 @@ import torch
 import pytorch_lightning as pl
 from torch import nn, optim
 from torchtext.vocab import Vocab
-from transformers import BertTokenizer
+from transformers import BertTokenizer, AdamW
 
 from stud.metrics import (
     F1SentimentExtraction,
@@ -79,6 +79,7 @@ class PlABSAModel(pl.LightningModule):
         # We receive one batch of data and perform a forward pass:
         logits = self.model(sentences, lengths)
         predictions = torch.argmax(logits, -1)
+
         # We adapt the logits and labels to fit the format required for the loss function
         logits = logits.view(-1, logits.shape[-1])
         # compute loss and f1 score
@@ -137,8 +138,11 @@ class PlABSAModel(pl.LightningModule):
         self.f1_evaluation.reset()
 
     def configure_optimizers(self) -> optim.Optimizer:
-        return optim.Adam(
-            self.parameters(),
-            lr=self.hparams.lr,
-            weight_decay=self.hparams.weight_decay,
-        )
+        if not self.hparams.use_bert:
+            return optim.Adam(
+                self.parameters(),
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+            )
+        else:
+            return AdamW(self.parameters(), lr=5e-5)

@@ -1,5 +1,7 @@
 from collections import defaultdict
 import torch
+from nltk import word_tokenize
+from nltk.tokenize.treebank import TreebankWordDetokenizer, TreebankWordTokenizer
 from torchmetrics import Metric
 from typing import *
 
@@ -37,7 +39,7 @@ class TokenToSentimentsConverter(object):
     def pick_sentiment(
         self, tokens: List[Tuple[str, str]], token: str, sentiment: str
     ) -> None:
-        if sentiment == "0":
+        if sentiment == "O":
             self.begin_sentiment(tokens, token, sentiment)
         elif sentiment.startswith("B-"):
             self.begin_sentiment(tokens, token, sentiment[2:])
@@ -48,36 +50,69 @@ class TokenToSentimentsConverter(object):
         self, input_tokens: List[str], output_sentiments: List[str]
     ) -> Dict[str, List[Tuple[str, str]]]:
         tokens2sentiments = []
+        # for token, sentiment in zip(input_tokens, output_sentiments):
+        #     self.pick_sentiment(tokens2sentiments, token, sentiment)
+        tokens2sentiments = []
         for token, sentiment in zip(input_tokens, output_sentiments):
-            self.pick_sentiment(tokens2sentiments, token, sentiment)
-        return {
-            "targets": [
-                (tk, sentiment)
-                for tk, sentiment in tokens2sentiments
-                if sentiment != "0"
-            ]
-        }
+            if sentiment == "O":
+                tokens2sentiments.append([[token], sentiment])
+            if sentiment.startswith("B-"):
+                tokens2sentiments.append([[token], sentiment[2:]])
+            if sentiment.startswith("I-"):
+                if len(tokens2sentiments) == 0:
+                    tokens2sentiments.append([[token], sentiment[2:]])
+                else:
+                    last_token, last_sentiment = tokens2sentiments[-1]
+                    if last_sentiment != sentiment[2:]:
+                        tokens2sentiments.append([[token], sentiment[2:]])
+                    else:
+                        tokens2sentiments[-1] = [last_token + [token], sentiment[2:]]
+        # return {
+        #     "targets": [
+        #         (tk, sentiment)
+        #         for tk, sentiment in tokens2sentiments
+        #         if sentiment != "O"
+        #     ]
+        # }
+        if self.tokenizer is None:
+            return {
+                "targets": [
+                    (TreebankWordDetokenizer().detokenize(tk), sentiment)
+                    for tk, sentiment in tokens2sentiments
+                    if sentiment != "O"
+                ]
+            }
+        else:
+            return {
+                "targets": [
+                    (self.tokenizer.convert_tokens_to_string(tk), sentiment)
+                    for tk, sentiment in tokens2sentiments
+                    if sentiment != "O"
+                ]
+            }
 
     def postprocess(self, sentences, to_process, lengths):
-        sentences_list: List[List[int]] = sentences.tolist()
+        # sentences_list: List[List[int]] = sentences.tolist()
         to_process_list: List[List[int]] = to_process.tolist()
 
         # remove padded elements
         for i, length in enumerate(lengths):
-            sentences_list[i] = sentences_list[i][:length]
+            # sentences_list[i] = sentences_list[i][:length]
             to_process_list[i] = to_process_list[i][:length]
 
         # extract tokens and associated sentiments
         if self.tokenizer is None:
-            tokens = [
-                [self.vocabulary.itos[x] for x in sentence]
-                for sentence in sentences_list
-            ]
+            # tokens = [
+            #     [self.vocabulary.itos[x] for x in sentence]
+            #     for sentence in sentences_list
+            # ]
+            tokens = [TreebankWordTokenizer().tokenize(x) for x in sentences]
         else:
-            tokens = [
-                self.tokenizer.convert_ids_to_tokens(sentence)
-                for sentence in sentences_list
-            ]
+            tokens = [self.tokenizer.tokenize(x) for x in sentences]
+            # tokens = [
+            #     self.tokenizer.convert_ids_to_tokens(sentence)
+            #     for sentence in sentences_list
+            # ]
 
         # convert indexes to tokens + IOB format sentiments
         processed_iob_sentiments = [
@@ -119,7 +154,7 @@ class F1SentimentExtraction(Metric):
         gt_raw_data: torch.Tensor,
         lengths: List[int],
     ):
-
+        sentences = [x["text"] for x in gt_raw_data]
         token_pred_sentiments = self.sentiments_converter.postprocess(
             sentences, preds, lengths
         )
@@ -250,6 +285,7 @@ class F1SentimentEvaluation(Metric):
         lengths: List[int],
     ):
 
+        sentences = [x["text"] for x in gt_raw_data]
         token_pred_sentiments = self.sentiments_converter.postprocess(
             sentences, preds, lengths
         )
@@ -266,6 +302,7 @@ class F1SentimentEvaluation(Metric):
                 self.set_state(
                     f"fn_{sent_type}", self.fn(sent_type) + len(gt_sent - pred_sent)
                 )
+
 
     def compute(self):
         scores = defaultdict(dict)

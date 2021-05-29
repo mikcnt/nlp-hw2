@@ -3,6 +3,8 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from torchtext.vocab import Vectors
+from transformers import BertTokenizer
+
 from stud.dataset import (
     read_data,
     preprocess,
@@ -15,7 +17,6 @@ from stud.utils import save_pickle
 
 if __name__ == "__main__":
     # --------- NECESSARY BOILER ---------
-    USE_BERT = True
     # set seeds for reproducibility
     pl.seed_everything(42)
     # paths
@@ -26,9 +27,11 @@ if __name__ == "__main__":
     dev_raw_data = read_data(dev_path)
 
     # --------- DATA ---------
+    USE_BERT = True
+    tokenizer = BertTokenizer.from_pretrained("bert-base-cased") if USE_BERT else None
     # preprocess data
-    train_data = preprocess(train_raw_data, use_bert=USE_BERT)
-    dev_data = preprocess(dev_raw_data, use_bert=USE_BERT)
+    train_data = preprocess(train_raw_data, tokenizer=tokenizer)
+    dev_data = preprocess(dev_raw_data, tokenizer=tokenizer)
     # build vocabularies (for both sentences and labels)
     vocabulary = build_vocab(train_data["sentences"], specials=["<pad>", "<unk>"])
     sentiments_vocabulary = build_vocab(train_data["targets"], specials=["<pad>"])
@@ -73,20 +76,24 @@ if __name__ == "__main__":
         dev_raw_data,
         vocabulary,
         sentiments_vocabulary,
-        use_bert=USE_BERT,
+        tokenizer=tokenizer,
     )
     # define model
     model = PlABSAModel(hparams, vocabularies, pretrained_embeddings)
 
     # callbacks
     early_stop_callback = EarlyStopping(
-        monitor="f1_extraction", min_delta=0.00, patience=10, verbose=False, mode="max"
+        monitor="f1_extraction",
+        min_delta=0.00,
+        patience=1000,
+        verbose=False,
+        mode="max",
     )
     checkpoint_callback = ModelCheckpoint(
         dirpath="./saved_checkpoints",
         filename="{epoch}_{f1_extraction:.4f}_{f1_evaluation:.4f}",
         monitor="f1_extraction",
-        save_top_k=1,
+        save_top_k=0,
         save_last=False,
         mode="max",
     )
@@ -95,8 +102,9 @@ if __name__ == "__main__":
     trainer = pl.Trainer(
         gpus=1,
         val_check_interval=1.0,
-        max_epochs=20,
+        max_epochs=1000,
         callbacks=[early_stop_callback, checkpoint_callback],
         num_sanity_val_steps=0,
+        # overfit_batches=1,
     )
     trainer.fit(model, datamodule=data_module)

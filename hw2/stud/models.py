@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from typing import *
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
-from transformers import BertModel
+from transformers import BertModel, BertForTokenClassification
 
 
 def lstm_padded(
@@ -50,17 +50,30 @@ class ABSAModel(nn.Module):
 class ABSABert(nn.Module):
     def __init__(self, hparams):
         super(ABSABert, self).__init__()
-        self.bert_model = BertModel.from_pretrained("bert-base-cased")
-        bert_output_dim = self.bert_model.config.hidden_size
-        self.dropout = nn.Dropout(hparams.dropout)
-        self.classifier = nn.Linear(bert_output_dim, hparams.num_classes)
+        self.model = BertForTokenClassification.from_pretrained(
+            "bert-base-cased", num_labels=hparams.num_classes
+        )
+
+    #     self.bert_model = BertModel.from_pretrained("bert-base-cased")
+    #     bert_output_dim = self.bert_model.config.hidden_size
+    #     self.dropout = nn.Dropout(hparams.dropout)
+    #     self.classifier = nn.Linear(bert_output_dim, hparams.num_classes)
+    #
+    # def forward(self, x, x_lengths):
+    #     attention_mask = torch.ones_like(x)
+    #     for i in x_lengths:
+    #         attention_mask[..., i:] = 0
+    #
+    #     output = self.bert_model(x, attention_mask)["last_hidden_state"]
+    #     output = self.dropout(output)
+    #     output = self.classifier(output)
+    #     return output
 
     def forward(self, x, x_lengths):
         attention_mask = torch.ones_like(x)
-        # for i in x_lengths:
-        #     attention_mask[..., i:] = 0
+        for i in x_lengths:
+            attention_mask[..., i:] = 0
 
-        output = self.bert_model(x, attention_mask)["last_hidden_state"]
-        output = self.dropout(output)
-        output = self.classifier(output)
+        output = self.model(x, attention_mask)["logits"]
+
         return output
