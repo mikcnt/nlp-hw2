@@ -2,15 +2,14 @@ import torch
 from torch import nn
 from typing import *
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
-from transformers import BertModel, BertForTokenClassification
-from torchcrf import CRF
+from transformers import BertModel
 
 
 def lstm_padded(
     lstm_layer: nn.Module, x: torch.Tensor, lengths: List[int]
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     x_packed = pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
-    o_packed, (h, c) = lstm_layer(x_packed)
+    o_packed, _ = lstm_layer(x_packed)
     return pad_packed_sequence(o_packed, batch_first=True)
 
 
@@ -120,13 +119,8 @@ class NER_WORD_MODEL_CRF(nn.Module):
 class ABSABert(nn.Module):
     def __init__(self, hparams):
         super(ABSABert, self).__init__()
-        # self.model = BertForTokenClassification.from_pretrained(
-        #     "bert-base-cased", num_labels=hparams.num_classes
-        # )
-
         self.bert = BertModel.from_pretrained("bert-base-cased")
         bert_output_dim = self.bert.config.hidden_size
-        # self.lstm = nn.LSTM(bert_output_dim, 300)
         self.dropout = nn.Dropout(hparams.dropout)
 
         self.classifier = nn.Linear(bert_output_dim, hparams.num_classes)
@@ -139,15 +133,5 @@ class ABSABert(nn.Module):
         output = self.bert(x, attention_mask)["last_hidden_state"]
         output = self.dropout(output)
 
-        # output, _ = self.lstm(output)
         output = self.classifier(output)
         return output
-
-    # def forward(self, x, x_lengths):
-    #     attention_mask = torch.ones_like(x)
-    #     for i in x_lengths:
-    #         attention_mask[..., i:] = 0
-    #
-    #     output = self.model(x, attention_mask)["logits"]
-    #
-    #     return output

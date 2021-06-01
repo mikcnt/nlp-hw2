@@ -1,16 +1,16 @@
 from typing import *
 import torch
 import pytorch_lightning as pl
+from nltk import TreebankWordTokenizer
 from torch import nn, optim
 from torchtext.vocab import Vocab
 from transformers import BertTokenizer, AdamW
 
 from stud.metrics import (
     F1SentimentExtraction,
-    TokenToSentimentsConverter,
     F1SentimentEvaluation,
 )
-from stud.models import ABSAModel, ABSABert, NER_WORD_MODEL_CRF
+from stud.models import ABSAModel, ABSABert
 
 
 class PlABSAModel(pl.LightningModule):
@@ -19,6 +19,7 @@ class PlABSAModel(pl.LightningModule):
         hparams: Dict[str, Any],
         vocabularies: Dict[str, Vocab],
         embeddings: torch.Tensor,
+        tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
         *args,
         **kwargs
     ) -> None:
@@ -26,16 +27,11 @@ class PlABSAModel(pl.LightningModule):
         self.save_hyperparameters(hparams)
         vocabulary = vocabularies["vocabulary"]
         sentiments_vocabulary = vocabularies["sentiments_vocabulary"]
-        self.sentiments_converter = TokenToSentimentsConverter(
-            vocabulary, sentiments_vocabulary
-        )
+        # self.sentiments_converter = TokenToSentimentsConverter(
+        #     vocabulary, sentiments_vocabulary, tokenizer=tokenizer
+        # )
         self.loss_function = nn.CrossEntropyLoss(
             ignore_index=sentiments_vocabulary["<pad>"]
-        )
-        tokenizer = (
-            BertTokenizer.from_pretrained("bert-base-cased")
-            if self.hparams.use_bert
-            else None
         )
         self.f1_extraction = F1SentimentExtraction(
             vocabulary=vocabulary,

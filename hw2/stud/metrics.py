@@ -1,6 +1,5 @@
 from collections import defaultdict
 import torch
-from nltk import word_tokenize
 from nltk.tokenize.treebank import TreebankWordDetokenizer, TreebankWordTokenizer
 from torchmetrics import Metric
 from typing import *
@@ -13,7 +12,7 @@ class TokenToSentimentsConverter(object):
         self,
         vocabulary,
         sentiments_vocabulary,
-        tokenizer: Optional[BertTokenizer] = None,
+        tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
     ):
         self.vocabulary = vocabulary
         self.sentiments_vocabulary = sentiments_vocabulary
@@ -88,11 +87,11 @@ class TokenToSentimentsConverter(object):
                     # therefore this token is part of the same target instance, with the same sentiment associated
                     else:
                         tokens2sentiments[-1] = [last_token + [token], sentiment[2:]]
-
         if isinstance(self.tokenizer, TreebankWordTokenizer):
+            detokenizer = TreebankWordDetokenizer()
             return {
                 "targets": [
-                    (self.tokenizer.detokenize(tk), sentiment)
+                    (detokenizer.detokenize(tk), sentiment)
                     for tk, sentiment in tokens2sentiments
                     if sentiment != "O"
                 ]
@@ -114,10 +113,7 @@ class TokenToSentimentsConverter(object):
             to_process_list[i] = to_process_list[i][:length]
 
         # extract tokens and associated sentiments
-        if self.tokenizer is None:
-            tokens = [TreebankWordTokenizer().tokenize(x) for x in sentences]
-        else:
-            tokens = [self.tokenizer.tokenize(x) for x in sentences]
+        tokens = [self.tokenizer.tokenize(x) for x in sentences]
 
         # convert indexes to tokens + IOB format sentiments
         processed_iob_sentiments = [
@@ -139,7 +135,7 @@ class F1SentimentExtraction(Metric):
         self,
         vocabulary,
         sentiments_vocabulary,
-        tokenizer=None,
+        tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
     ):
         super().__init__(dist_sync_on_step=False)
         self.vocabulary = vocabulary

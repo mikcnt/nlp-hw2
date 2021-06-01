@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
     # --------- CONSTANTS ---------
     USE_BERT = False
-    TAGGING_SCHEMA = "IOB"
+    TAGGING_SCHEMA = "BIOES"
     assert TAGGING_SCHEMA in [
         "IOB",
         "BIOES",
@@ -91,7 +91,9 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
     )
     # define model
-    model = PlABSAModel(hparams, vocabularies, embeddings=pretrained_embeddings)
+    model = PlABSAModel(
+        hparams, vocabularies, embeddings=pretrained_embeddings, tokenizer=tokenizer
+    )
     # callbacks
     early_stop_callback = EarlyStopping(
         monitor="f1_evaluation",
