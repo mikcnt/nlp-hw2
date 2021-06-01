@@ -89,10 +89,10 @@ class TokenToSentimentsConverter(object):
                     else:
                         tokens2sentiments[-1] = [last_token + [token], sentiment[2:]]
 
-        if self.tokenizer is None:
+        if isinstance(self.tokenizer, TreebankWordTokenizer):
             return {
                 "targets": [
-                    (TreebankWordDetokenizer().detokenize(tk), sentiment)
+                    (self.tokenizer.detokenize(tk), sentiment)
                     for tk, sentiment in tokens2sentiments
                     if sentiment != "O"
                 ]

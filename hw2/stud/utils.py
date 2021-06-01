@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch.nn.utils.rnn import pad_sequence
-from torchtext.vocab import Vocab
+from torchtext.vocab import Vocab, Vectors
 from typing import *
 import pickle
 
@@ -41,3 +41,14 @@ def pad_collate(batch):
     }
 
     return batch
+
+
+def compute_pretrained_embeddings(path: str, cache: str, vocabulary: Vocab):
+    vectors = Vectors(path, cache=cache)
+    pretrained_embeddings = torch.randn(len(vocabulary), vectors.dim)
+    for i, w in enumerate(vocabulary.itos):
+        if w in vectors.stoi:
+            vec = vectors.get_vecs_by_tokens(w)
+            pretrained_embeddings[i] = vec
+    pretrained_embeddings[vocabulary["<pad>"]] = torch.zeros(vectors.dim)
+    return pretrained_embeddings
