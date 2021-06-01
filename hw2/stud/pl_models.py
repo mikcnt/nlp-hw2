@@ -10,7 +10,7 @@ from stud.metrics import (
     TokenToSentimentsConverter,
     F1SentimentEvaluation,
 )
-from stud.models import ABSAModel, ABSABert
+from stud.models import ABSAModel, ABSABert, NER_WORD_MODEL_CRF
 
 
 class PlABSAModel(pl.LightningModule):
@@ -47,11 +47,13 @@ class PlABSAModel(pl.LightningModule):
             sentiments_vocabulary=sentiments_vocabulary,
             tokenizer=tokenizer,
         )
+
         self.model = (
             ABSAModel(self.hparams, embeddings)
             if not self.hparams.use_bert
             else ABSABert(self.hparams)
         )
+        # self.model = NER_WORD_MODEL_CRF(self.hparams, embeddings)
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         sentences = batch["inputs"]
@@ -119,7 +121,6 @@ class PlABSAModel(pl.LightningModule):
         self.log_dict(
             {
                 "val_loss": val_loss,
-                # "f1_val": val_f1_score,
             },
             prog_bar=True,
             on_step=False,
@@ -145,4 +146,4 @@ class PlABSAModel(pl.LightningModule):
                 weight_decay=self.hparams.weight_decay,
             )
         else:
-            return AdamW(self.parameters(), lr=5e-5)
+            return AdamW(self.parameters(), lr=2e-5)

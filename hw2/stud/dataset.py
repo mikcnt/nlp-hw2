@@ -7,7 +7,7 @@ from collections import Counter
 
 from nltk import TreebankWordTokenizer
 from tqdm import tqdm
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Tuple, Dict, Any, Optional, Union
 from nltk.tokenize import word_tokenize
 from torch.utils.data import Dataset, DataLoader
 from torchtext.vocab import Vocab
@@ -18,31 +18,16 @@ from transformers import BertTokenizer
 nltk.download("punkt")
 
 
-# def tokenize(sentence, use_bert=False):
-#     if use_bert:
-#         return bert_tokenizer.tokenize(sentence)
-#     else:
-#         return word_tokenize(sentence)
-
-
 def tokens_position(
     sentence: str,
     target_char_positions: List[int],
-    tokenizer: Optional[BertTokenizer] = None,
+    tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
 ) -> List[int]:
     """Extract tokens positions from position in string."""
     s_pos, e_pos = target_char_positions
-    tokens_between_positions = (
-        tokenizer.tokenize(sentence[s_pos:e_pos])
-        if tokenizer is not None
-        else TreebankWordTokenizer().tokenize(sentence[s_pos:e_pos])
-    )
+    tokens_between_positions = tokenizer.tokenize(sentence[s_pos:e_pos])
     n_tokens = len(tokens_between_positions)
-    s_token = (
-        len(TreebankWordTokenizer().tokenize(sentence[:s_pos]))
-        if tokenizer is None
-        else len(tokenizer.tokenize(sentence[:s_pos]))
-    )
+    s_token = len(tokenizer.tokenize(sentence[:s_pos]))
     return list(range(s_token, s_token + n_tokens))
 
 
@@ -53,28 +38,18 @@ def read_data(path: str) -> List[Dict[str, Any]]:
     return raw_data
 
 
-def preprocess(
-    raw_data, tokenizer: Optional[BertTokenizer] = None, preprocess_targets=True
+def json_to_iob(
+    raw_data,
+    tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
+    train: bool = True,
 ):
-    # split data in 2 + 1 lists (3 for restaurants data, 2 for laptops data):
-    # for both datasets: sentences (i.e., raw text), targets (i.e., position range, instance, sentiment),
-    # for restaurant dataset: categories (i.e., category, sentiment)
     processed_data = {"sentences": [], "targets": []}
-    # TODO: categories
     for d in raw_data:
         # extract tokens
         text = d["text"]
-        tokens = (
-            tokenizer.tokenize(text)
-            if tokenizer is not None
-            else TreebankWordTokenizer().tokenize(text)
-        )
+        tokens = tokenizer.tokenize(text)
         processed_data["sentences"].append(tokens)
-        if preprocess_targets:
-            # possible sentiments are: positive, negative, neutral, conflict
-            # `B-sentiment` means that it's the starting token of a sequence (possibly of length 1)
-            # `I-sentiment` means that it's following another token (either B- or another I-) of a sequence
-            # `O` means that no sentiment is involved with that the token
+        if train:
             sentiments = ["O"] * len(tokens)
             for start_end, instance, sentiment in d["targets"]:
                 sentiment_positions = tokens_position(
@@ -83,6 +58,37 @@ def preprocess(
                 for i, s in enumerate(sentiment_positions):
                     if i == 0:
                         sentiments[s] = "B-" + sentiment
+                    else:
+                        sentiments[s] = "I-" + sentiment
+            processed_data["targets"].append(sentiments)
+
+    return processed_data
+
+
+def json_to_bioes(
+    raw_data,
+    tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
+    train: bool = True,
+):
+    processed_data = {"sentences": [], "targets": []}
+    for d in raw_data:
+        # extract tokens
+        text = d["text"]
+        tokens = tokenizer.tokenize(text)
+        processed_data["sentences"].append(tokens)
+        if train:
+            sentiments = ["O"] * len(tokens)
+            for start_end, instance, sentiment in d["targets"]:
+                sentiment_positions = tokens_position(
+                    text, start_end, tokenizer=tokenizer
+                )
+                for i, s in enumerate(sentiment_positions):
+                    if len(sentiment_positions) == 1:
+                        sentiments[s] = "S-" + sentiment
+                    elif i == 0:
+                        sentiments[s] = "B-" + sentiment
+                    elif i == len(sentiment_positions) - 1:
+                        sentiments[s] = "E-" + sentiment
                     else:
                         sentiments[s] = "I-" + sentiment
             processed_data["targets"].append(sentiments)
@@ -114,16 +120,16 @@ class ABSADataset(Dataset):
         raw_data: List[Dict[str, Any]],
         vocabulary: Vocab,
         sentiments_vocabulary: Vocab,
-        preprocess_targets: bool = True,
-        tokenizer: Optional[BertTokenizer] = None,
+        tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
+        tagging_schema: str,
+        train: bool = True,
     ) -> None:
         super(ABSADataset, self).__init__()
         self.raw_data = raw_data
-        self.preprocess_targets = preprocess_targets
         self.tokenizer = tokenizer
-        processed_data = preprocess(
-            raw_data, tokenizer=tokenizer, preprocess_targets=preprocess_targets
-        )
+        self.train = train
+        preprocess = json_to_iob if tagging_schema == "IOB" else json_to_bioes
+        processed_data = preprocess(raw_data, tokenizer=tokenizer, train=train)
         self.sentences = processed_data["sentences"]
         self.targets = processed_data["targets"]
         self.vocabulary = vocabulary
@@ -132,7 +138,7 @@ class ABSADataset(Dataset):
         self.index_dataset()
 
     def encode_text(self, sentence: List[str]) -> List[int]:
-        if self.tokenizer is not None:
+        if isinstance(self.tokenizer, BertTokenizer):
             indices = self.tokenizer.convert_tokens_to_ids(sentence)
         else:
             indices = []
@@ -149,7 +155,7 @@ class ABSADataset(Dataset):
             sentence = self.sentences[i]
             data_dict["raw"] = self.raw_data[i]
             data_dict["inputs"] = torch.LongTensor(self.encode_text(sentence))
-            if self.preprocess_targets:
+            if self.train:
                 targets = self.targets[i]
                 data_dict["outputs"] = torch.LongTensor(
                     [self.sentiments_vocabulary[t] for t in targets]
@@ -171,14 +177,16 @@ class DataModuleABSA(pl.LightningDataModule):
         dev_data,
         vocabulary,
         sentiments_vocabulary,
+        tagging_schema: str,
         tokenizer=None,
     ):
 
-        super().__init__()
+        super(DataModuleABSA, self).__init__()
         self.train_data = train_data
         self.dev_data = dev_data
         self.vocabulary = vocabulary
         self.sentiments_vocabulary = sentiments_vocabulary
+        self.tagging_schema = tagging_schema
         self.tokenizer = tokenizer
 
     def setup(self, stage=None):
@@ -186,12 +194,14 @@ class DataModuleABSA(pl.LightningDataModule):
             self.train_data,
             self.vocabulary,
             self.sentiments_vocabulary,
+            tagging_schema=self.tagging_schema,
             tokenizer=self.tokenizer,
         )
         self.devset = ABSADataset(
             self.dev_data,
             self.vocabulary,
             self.sentiments_vocabulary,
+            tagging_schema=self.tagging_schema,
             tokenizer=self.tokenizer,
         )
 

@@ -1,5 +1,6 @@
 import torch
 import pytorch_lightning as pl
+from nltk import TreebankWordTokenizer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from torchtext.vocab import Vectors
@@ -7,7 +8,8 @@ from transformers import BertTokenizer
 
 from stud.dataset import (
     read_data,
-    preprocess,
+    json_to_iob,
+    json_to_bioes,
     build_vocab,
     DataModuleABSA,
 )
@@ -27,13 +29,25 @@ if __name__ == "__main__":
     dev_raw_data = read_data(dev_path)
 
     # --------- DATA ---------
-    USE_BERT = True
-    tokenizer = BertTokenizer.from_pretrained("bert-base-cased") if USE_BERT else None
-    # preprocess data
+    USE_BERT = False
+    TAGGING_SCHEMA = "IOB"
+    tokenizer = (
+        BertTokenizer.from_pretrained("bert-base-cased")
+        if USE_BERT
+        else TreebankWordTokenizer()
+    )
+    # preprocess data: convert json format to either IOB or BIOES
+    assert TAGGING_SCHEMA in [
+        "IOB",
+        "BIOES",
+    ], "Tagging schema should be either IOB or BIOES."
+    preprocess = json_to_iob if TAGGING_SCHEMA == "IOB" else json_to_bioes
     train_data = preprocess(train_raw_data, tokenizer=tokenizer)
     dev_data = preprocess(dev_raw_data, tokenizer=tokenizer)
     # build vocabularies (for both sentences and labels)
-    vocabulary = build_vocab(train_data["sentences"], specials=["<pad>", "<unk>"])
+    vocabulary = build_vocab(
+        train_data["sentences"], specials=["<pad>", "<unk>"], min_freq=2
+    )
     sentiments_vocabulary = build_vocab(train_data["targets"], specials=["<pad>"])
     vocabularies = {
         "vocabulary": vocabulary,
@@ -58,15 +72,16 @@ if __name__ == "__main__":
     # --------- HYPERPARAMETERS ---------
     hparams = {
         "vocab_size": len(vocabulary),
-        "hidden_dim": 128,
+        "hidden_dim": 300,
         "embedding_dim": vectors.dim,
         "num_classes": len(sentiments_vocabulary),
-        "bidirectional": False,
-        "num_layers": 1,
+        "bidirectional": True,
+        "num_layers": 3,
         "dropout": 0.5,
         "lr": 0.001,
         "weight_decay": 0.0,
         "use_bert": USE_BERT,
+        "tagging_schema": TAGGING_SCHEMA,
     }
 
     # --------- TRAINER ---------
@@ -76,10 +91,11 @@ if __name__ == "__main__":
         dev_raw_data,
         vocabulary,
         sentiments_vocabulary,
+        tagging_schema=TAGGING_SCHEMA,
         tokenizer=tokenizer,
     )
     # define model
-    model = PlABSAModel(hparams, vocabularies, pretrained_embeddings)
+    model = PlABSAModel(hparams, vocabularies, embeddings=pretrained_embeddings)
 
     # callbacks
     early_stop_callback = EarlyStopping(

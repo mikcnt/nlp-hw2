@@ -47,33 +47,48 @@ class TokenToSentimentsConverter(object):
             self.inside_sentiment(tokens, token, sentiment[2:])
 
     def compute_sentiments(
-        self, input_tokens: List[str], output_sentiments: List[str]
+        self,
+        input_tokens: List[str],
+        output_sentiments: List[str],
     ) -> Dict[str, List[Tuple[str, str]]]:
+
         tokens2sentiments = []
-        # for token, sentiment in zip(input_tokens, output_sentiments):
-        #     self.pick_sentiment(tokens2sentiments, token, sentiment)
-        tokens2sentiments = []
-        for token, sentiment in zip(input_tokens, output_sentiments):
+        for i, (token, sentiment) in enumerate(zip(input_tokens, output_sentiments)):
+            # just ignore outside sentiments for the moment
             if sentiment == "O":
                 tokens2sentiments.append([[token], sentiment])
+
+            # if it is single, then we just need to append that
+            if sentiment.startswith("S-"):
+                tokens2sentiments.append([[token], sentiment[2:]])
+
+            # if it is starting, then we expect something after, so we append the first one
             if sentiment.startswith("B-"):
                 tokens2sentiments.append([[token], sentiment[2:]])
-            if sentiment.startswith("I-"):
+
+            # if it is inside, we have different options
+            if sentiment.startswith("I-") or sentiment.startswith("E-"):
+                # if this is the first sentiment, then we just treat it as a beginning one
                 if len(tokens2sentiments) == 0:
                     tokens2sentiments.append([[token], sentiment[2:]])
                 else:
+                    # otherwise, there is some other sentiment before
                     last_token, last_sentiment = tokens2sentiments[-1]
+                    # if the last sentiment is not equal to the one we're considering, then we treat this
+                    # again as a beginning one.
                     if last_sentiment != sentiment[2:]:
                         tokens2sentiments.append([[token], sentiment[2:]])
+                    # if the previous sentiment was a single target word or an ending one
+                    # we treat the one we're considering again as a beginning one
+                    elif output_sentiments[-1].startswith("S-") or output_sentiments[
+                        -1
+                    ].startswith("E-"):
+                        tokens2sentiments.append([[token], sentiment[2:]])
+                    # otherwise, the sentiment before was a B or a I with the same sentiment
+                    # therefore this token is part of the same target instance, with the same sentiment associated
                     else:
                         tokens2sentiments[-1] = [last_token + [token], sentiment[2:]]
-        # return {
-        #     "targets": [
-        #         (tk, sentiment)
-        #         for tk, sentiment in tokens2sentiments
-        #         if sentiment != "O"
-        #     ]
-        # }
+
         if self.tokenizer is None:
             return {
                 "targets": [
@@ -92,27 +107,17 @@ class TokenToSentimentsConverter(object):
             }
 
     def postprocess(self, sentences, to_process, lengths):
-        # sentences_list: List[List[int]] = sentences.tolist()
         to_process_list: List[List[int]] = to_process.tolist()
 
         # remove padded elements
         for i, length in enumerate(lengths):
-            # sentences_list[i] = sentences_list[i][:length]
             to_process_list[i] = to_process_list[i][:length]
 
         # extract tokens and associated sentiments
         if self.tokenizer is None:
-            # tokens = [
-            #     [self.vocabulary.itos[x] for x in sentence]
-            #     for sentence in sentences_list
-            # ]
             tokens = [TreebankWordTokenizer().tokenize(x) for x in sentences]
         else:
             tokens = [self.tokenizer.tokenize(x) for x in sentences]
-            # tokens = [
-            #     self.tokenizer.convert_ids_to_tokens(sentence)
-            #     for sentence in sentences_list
-            # ]
 
         # convert indexes to tokens + IOB format sentiments
         processed_iob_sentiments = [
@@ -302,7 +307,6 @@ class F1SentimentEvaluation(Metric):
                 self.set_state(
                     f"fn_{sent_type}", self.fn(sent_type) + len(gt_sent - pred_sent)
                 )
-
 
     def compute(self):
         scores = defaultdict(dict)
