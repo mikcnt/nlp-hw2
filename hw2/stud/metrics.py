@@ -1,133 +1,12 @@
 from collections import defaultdict
 import torch
-from nltk.tokenize.treebank import TreebankWordDetokenizer, TreebankWordTokenizer
+from nltk.tokenize.treebank import TreebankWordTokenizer
 from torchmetrics import Metric
 from typing import *
 
 from transformers import BertTokenizer
 
-
-class TokenToSentimentsConverter(object):
-    def __init__(
-        self,
-        vocabulary,
-        sentiments_vocabulary,
-        tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
-    ):
-        self.vocabulary = vocabulary
-        self.sentiments_vocabulary = sentiments_vocabulary
-        self.tokenizer = tokenizer
-
-    def begin_sentiment(
-        self, tokens: List[Tuple[str, str]], token: str, sentiment: str
-    ) -> None:
-        tokens.append((token, sentiment))
-
-    def inside_sentiment(
-        self, tokens: List[Tuple[str, str]], token: str, sentiment: str
-    ) -> None:
-        if len(tokens) == 0:
-            self.begin_sentiment(tokens, token, sentiment)
-            return
-        last_token, last_sentiment = tokens[-1]
-        if last_sentiment != sentiment:
-            self.begin_sentiment(tokens, token, sentiment)
-        else:
-            tokens[-1] = (f"{last_token} {token}", last_sentiment)
-
-    def pick_sentiment(
-        self, tokens: List[Tuple[str, str]], token: str, sentiment: str
-    ) -> None:
-        if sentiment == "O":
-            self.begin_sentiment(tokens, token, sentiment)
-        elif sentiment.startswith("B-"):
-            self.begin_sentiment(tokens, token, sentiment[2:])
-        elif sentiment.startswith("I-"):
-            self.inside_sentiment(tokens, token, sentiment[2:])
-
-    def compute_sentiments(
-        self,
-        input_tokens: List[str],
-        output_sentiments: List[str],
-    ) -> Dict[str, List[Tuple[str, str]]]:
-
-        tokens2sentiments = []
-        for i, (token, sentiment) in enumerate(zip(input_tokens, output_sentiments)):
-            # just ignore outside sentiments for the moment
-            if sentiment == "O":
-                tokens2sentiments.append([[token], sentiment])
-
-            # if it is single, then we just need to append that
-            if sentiment.startswith("S-"):
-                tokens2sentiments.append([[token], sentiment[2:]])
-
-            # if it is starting, then we expect something after, so we append the first one
-            if sentiment.startswith("B-"):
-                tokens2sentiments.append([[token], sentiment[2:]])
-
-            # if it is inside, we have different options
-            if sentiment.startswith("I-") or sentiment.startswith("E-"):
-                # if this is the first sentiment, then we just treat it as a beginning one
-                if len(tokens2sentiments) == 0:
-                    tokens2sentiments.append([[token], sentiment[2:]])
-                else:
-                    # otherwise, there is some other sentiment before
-                    last_token, last_sentiment = tokens2sentiments[-1]
-                    # if the last sentiment is not equal to the one we're considering, then we treat this
-                    # again as a beginning one.
-                    if last_sentiment != sentiment[2:]:
-                        tokens2sentiments.append([[token], sentiment[2:]])
-                    # if the previous sentiment was a single target word or an ending one
-                    # we treat the one we're considering again as a beginning one
-                    elif output_sentiments[-1].startswith("S-") or output_sentiments[
-                        -1
-                    ].startswith("E-"):
-                        tokens2sentiments.append([[token], sentiment[2:]])
-                    # otherwise, the sentiment before was a B or a I with the same sentiment
-                    # therefore this token is part of the same target instance, with the same sentiment associated
-                    else:
-                        tokens2sentiments[-1] = [last_token + [token], sentiment[2:]]
-        if isinstance(self.tokenizer, TreebankWordTokenizer):
-            detokenizer = TreebankWordDetokenizer()
-            return {
-                "targets": [
-                    (detokenizer.detokenize(tk), sentiment)
-                    for tk, sentiment in tokens2sentiments
-                    if sentiment != "O"
-                ]
-            }
-        else:
-            return {
-                "targets": [
-                    (self.tokenizer.convert_tokens_to_string(tk), sentiment)
-                    for tk, sentiment in tokens2sentiments
-                    if sentiment != "O"
-                ]
-            }
-
-    def postprocess(self, sentences, to_process, lengths):
-        to_process_list: List[List[int]] = to_process.tolist()
-
-        # remove padded elements
-        for i, length in enumerate(lengths):
-            to_process_list[i] = to_process_list[i][:length]
-
-        # extract tokens and associated sentiments
-        tokens = [self.tokenizer.tokenize(x) for x in sentences]
-
-        # convert indexes to tokens + IOB format sentiments
-        processed_iob_sentiments = [
-            [self.sentiments_vocabulary.itos[x] for x in batch]
-            for batch in to_process_list
-        ]
-
-        # convert IOB sentiments to simple | target words - sentiment | format
-        words_to_sentiment = [
-            self.compute_sentiments(token, output)
-            for token, output in zip(tokens, processed_iob_sentiments)
-        ]
-
-        return words_to_sentiment
+from stud.tokens_converter import TokenToSentimentsConverter
 
 
 class F1SentimentExtraction(Metric):
@@ -136,12 +15,16 @@ class F1SentimentExtraction(Metric):
         vocabulary,
         sentiments_vocabulary,
         tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
+        tagging_schema: str,
     ):
         super().__init__(dist_sync_on_step=False)
         self.vocabulary = vocabulary
         self.sentiments_vocabulary = sentiments_vocabulary
         self.sentiments_converter = TokenToSentimentsConverter(
-            vocabulary, sentiments_vocabulary, tokenizer
+            vocabulary,
+            sentiments_vocabulary,
+            tokenizer,
+            tagging_schema,
         )
         self.add_state("tp", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self.add_state("fp", default=torch.tensor(0.0), dist_reduce_fx="sum")
@@ -156,7 +39,7 @@ class F1SentimentExtraction(Metric):
         lengths: List[int],
     ):
         sentences = [x["text"] for x in gt_raw_data]
-        token_pred_sentiments = self.sentiments_converter.postprocess(
+        token_pred_sentiments = self.sentiments_converter.batch_sentiments_to_tags(
             sentences, preds, lengths
         )
 
@@ -197,15 +80,20 @@ class F1SentimentEvaluation(Metric):
         self,
         vocabulary,
         sentiments_vocabulary,
+        tagging_schema: str,
+        tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
         mode="Aspect Sentiment",
-        tokenizer=None,
     ):
         super().__init__(dist_sync_on_step=False)
         self.vocabulary = vocabulary
         self.sentiments_vocabulary = sentiments_vocabulary
         self.tokenizer = tokenizer
+
         self.sentiments_converter = TokenToSentimentsConverter(
-            vocabulary, sentiments_vocabulary, tokenizer=tokenizer
+            vocabulary,
+            sentiments_vocabulary,
+            tokenizer=tokenizer,
+            tagging_schema=tagging_schema,
         )
         self.mode = mode
         if mode == "Category Extraction":
@@ -287,7 +175,7 @@ class F1SentimentEvaluation(Metric):
     ):
 
         sentences = [x["text"] for x in gt_raw_data]
-        token_pred_sentiments = self.sentiments_converter.postprocess(
+        token_pred_sentiments = self.sentiments_converter.batch_sentiments_to_tags(
             sentences, preds, lengths
         )
 
@@ -315,8 +203,8 @@ class F1SentimentEvaluation(Metric):
                     self.fn(sent_type) + self.tp(sent_type)
                 )
             else:
-                scores[sent_type]["p"] = torch.tensor(0.0)
-                scores[sent_type]["r"] = torch.tensor(0.0)
+                scores[sent_type]["p"] = torch.tensor(0.0, device="cuda")
+                scores[sent_type]["r"] = torch.tensor(0.0, device="cuda")
 
             if not scores[sent_type]["p"] + scores[sent_type]["r"] == 0:
                 scores[sent_type]["f1"] = (
@@ -326,7 +214,7 @@ class F1SentimentEvaluation(Metric):
                     / (scores[sent_type]["p"] + scores[sent_type]["r"])
                 )
             else:
-                scores[sent_type]["f1"] = torch.tensor(0.0)
+                scores[sent_type]["f1"] = torch.tensor(0.0, device="cuda")
 
         # Compute micro F1 Scores
         tp = sum([self.tp(sent_type) for sent_type in self.sentiment_types])
@@ -340,9 +228,9 @@ class F1SentimentEvaluation(Metric):
 
         else:
             precision, recall, f1 = (
-                torch.tensor(0.0),
-                torch.tensor(0.0),
-                torch.tensor(0.0),
+                torch.tensor(0.0, device="cuda"),
+                torch.tensor(0.0, device="cuda"),
+                torch.tensor(0.0, device="cuda"),
             )
 
         scores["ALL"]["p"] = precision

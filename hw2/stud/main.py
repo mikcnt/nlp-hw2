@@ -6,10 +6,9 @@ from transformers import BertTokenizer
 
 from stud.dataset import (
     read_data,
-    json_to_iob,
-    json_to_bioes,
     build_vocab,
     DataModuleABSA,
+    preprocess,
 )
 
 from stud.pl_models import PlABSAModel
@@ -28,7 +27,7 @@ if __name__ == "__main__":
 
     # --------- CONSTANTS ---------
     USE_BERT = False
-    TAGGING_SCHEMA = "BIOES"
+    TAGGING_SCHEMA = "IOB"
     assert TAGGING_SCHEMA in [
         "IOB",
         "BIOES",
@@ -42,8 +41,9 @@ if __name__ == "__main__":
     )
 
     # --------- TAG DATA: IOB OR BIOES ---------
-    preprocess_fun = json_to_iob if TAGGING_SCHEMA == "IOB" else json_to_bioes
-    train_data = preprocess_fun(train_raw_data, tokenizer=tokenizer)
+    train_data = preprocess(
+        train_raw_data, tokenizer=tokenizer, tagging_schema=TAGGING_SCHEMA
+    )
 
     # --------- VOCABULARIES ---------
     vocabulary = build_vocab(
@@ -78,6 +78,7 @@ if __name__ == "__main__":
         "weight_decay": 0.0,
         "use_bert": USE_BERT,
         "tagging_schema": TAGGING_SCHEMA,
+        "use_crf": True,
     }
 
     # --------- TRAINER ---------
@@ -96,15 +97,15 @@ if __name__ == "__main__":
     )
     # callbacks
     early_stop_callback = EarlyStopping(
-        monitor="f1_evaluation",
-        patience=15,
+        monitor="f1_extraction",
+        patience=1000,
         verbose=False,
         mode="max",
     )
     checkpoint_callback = ModelCheckpoint(
         dirpath="./saved_checkpoints",
         filename="{epoch}_{f1_extraction:.4f}_{f1_evaluation:.4f}",
-        monitor="f1_evaluation",
+        monitor="f1_extraction",
         save_top_k=0,
         save_last=False,
         mode="max",
@@ -114,7 +115,7 @@ if __name__ == "__main__":
     trainer = pl.Trainer(
         gpus=1,
         val_check_interval=1.0,
-        max_epochs=1000,
+        max_epochs=10,
         callbacks=[early_stop_callback, checkpoint_callback],
         num_sanity_val_steps=0,
         # overfit_batches=1,

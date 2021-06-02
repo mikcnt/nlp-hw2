@@ -21,12 +21,13 @@ class PlABSAModel(pl.LightningModule):
         embeddings: torch.Tensor,
         tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
         *args,
-        **kwargs
+        **kwargs,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(hparams)
         vocabulary = vocabularies["vocabulary"]
         sentiments_vocabulary = vocabularies["sentiments_vocabulary"]
+        self.sentiments_vocabulary = sentiments_vocabulary
         # self.sentiments_converter = TokenToSentimentsConverter(
         #     vocabulary, sentiments_vocabulary, tokenizer=tokenizer
         # )
@@ -37,11 +38,13 @@ class PlABSAModel(pl.LightningModule):
             vocabulary=vocabulary,
             sentiments_vocabulary=sentiments_vocabulary,
             tokenizer=tokenizer,
+            tagging_schema=self.hparams.tagging_schema,
         )
         self.f1_evaluation = F1SentimentEvaluation(
             vocabulary=vocabulary,
             sentiments_vocabulary=sentiments_vocabulary,
             tokenizer=tokenizer,
+            tagging_schema=self.hparams.tagging_schema,
         )
 
         self.model = (
@@ -49,7 +52,6 @@ class PlABSAModel(pl.LightningModule):
             if not self.hparams.use_bert
             else ABSABert(self.hparams)
         )
-        # self.model = NER_WORD_MODEL_CRF(self.hparams, embeddings)
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         sentences = batch["inputs"]
@@ -76,12 +78,19 @@ class PlABSAModel(pl.LightningModule):
         raw_data = batch["raw"]
         # We receive one batch of data and perform a forward pass:
         logits = self.model(sentences, lengths)
-        predictions = torch.argmax(logits, -1)
 
-        # We adapt the logits and labels to fit the format required for the loss function
-        logits = logits.view(-1, logits.shape[-1])
         # compute loss and f1 score
-        loss = self.loss_function(logits, labels.view(-1))
+        if self.hparams.use_crf:
+            mask = labels != self.sentiments_vocabulary["<pad>"]
+            loss = -1 * self.model.crf(logits, labels, mask=mask)
+            predictions = torch.tensor(
+                self.model.crf.decode(logits), device=self.device
+            )
+        else:
+            loss = self.loss_function(
+                logits.view(-1, logits.shape[-1]), labels.view(-1)
+            )
+            predictions = torch.argmax(logits, -1)
         if compute_f1:
             f1_extraction = self.f1_extraction(
                 sentences, predictions, raw_data, lengths
@@ -101,7 +110,6 @@ class PlABSAModel(pl.LightningModule):
         self.log_dict(
             {
                 "train_loss": train_loss,
-                # "f1_train": train_f1_score,
             },
             prog_bar=True,
         )

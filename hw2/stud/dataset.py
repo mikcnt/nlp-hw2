@@ -7,7 +7,7 @@ from collections import Counter
 from nltk import TreebankWordTokenizer
 from nltk.tokenize.treebank import TreebankWordDetokenizer
 from tqdm import tqdm
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, Optional
 from torch.utils.data import Dataset, DataLoader
 from torchtext.vocab import Vocab
 from stud.utils import pad_collate
@@ -15,6 +15,13 @@ from transformers import BertTokenizer
 
 # set up tokenizers
 nltk.download("punkt")
+
+
+def read_data(path: str) -> List[Dict[str, Any]]:
+    """Read data from json file."""
+    with open(path) as f:
+        raw_data = json.load(f)
+    return raw_data
 
 
 def tokens_position(
@@ -30,165 +37,131 @@ def tokens_position(
     return list(range(s_token, s_token + n_tokens))
 
 
-def read_data(path: str) -> List[Dict[str, Any]]:
-    """Read data from json file."""
-    with open(path) as f:
-        raw_data = json.load(f)
-    return raw_data
+def json_to_tags(
+    example, tokenizer: Union[TreebankWordTokenizer, BertTokenizer], tagging_schema: str
+):
+    assert tagging_schema in ["IOB", "BIOES"], "Schema must be either `IOB` or `BIOES`."
+
+    text = example["text"]
+    targets = example["targets"]
+    tokens = tokenizer.tokenize(text)
+
+    sentiments = ["O"] * len(tokens)
+    for start_end, instance, sentiment in targets:
+        sentiment_positions = tokens_position(text, start_end, tokenizer=tokenizer)
+        for i, s in enumerate(sentiment_positions):
+            if tagging_schema == "IOB":
+                if i == 0:
+                    sentiments[s] = "B-" + sentiment
+                else:
+                    sentiments[s] = "I-" + sentiment
+            elif tagging_schema == "BIOES":
+                if len(sentiment_positions) == 1:
+                    sentiments[s] = "S-" + sentiment
+                elif i == 0:
+                    sentiments[s] = "B-" + sentiment
+                elif i == len(sentiment_positions) - 1:
+                    sentiments[s] = "E-" + sentiment
+                else:
+                    sentiments[s] = "I-" + sentiment
+    return sentiments
 
 
-def json_to_iob(
+def preprocess(
     raw_data: List[Dict[str, Any]],
     tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
+    tagging_schema: Optional[str] = None,
     train: bool = True,
 ):
     """Convert data in JSON format to IOB schema."""
     processed_data = {"sentences": [], "targets": []}
     for d in raw_data:
-        # extract tokens
         text = d["text"]
         tokens = tokenizer.tokenize(text)
         processed_data["sentences"].append(tokens)
         if train:
-            sentiments = ["O"] * len(tokens)
-            for start_end, instance, sentiment in d["targets"]:
-                sentiment_positions = tokens_position(
-                    text, start_end, tokenizer=tokenizer
-                )
-                for i, s in enumerate(sentiment_positions):
-                    if i == 0:
-                        sentiments[s] = "B-" + sentiment
-                    else:
-                        sentiments[s] = "I-" + sentiment
+            sentiments = json_to_tags(d, tokenizer, tagging_schema)
             processed_data["targets"].append(sentiments)
 
     return processed_data
 
 
-def json_to_bioes(
-    raw_data: List[Dict[str, Any]],
-    tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
-    train: bool = True,
-):
-    """Convert data in JSON format to BIOES schema."""
-    processed_data = {"sentences": [], "targets": []}
-    for d in raw_data:
-        # extract tokens
-        text = d["text"]
-        tokens = tokenizer.tokenize(text)
-        processed_data["sentences"].append(tokens)
-        if train:
-            sentiments = ["O"] * len(tokens)
-            for start_end, instance, sentiment in d["targets"]:
-                sentiment_positions = tokens_position(
-                    text, start_end, tokenizer=tokenizer
-                )
-                for i, s in enumerate(sentiment_positions):
-                    if len(sentiment_positions) == 1:
-                        sentiments[s] = "S-" + sentiment
-                    elif i == 0:
-                        sentiments[s] = "B-" + sentiment
-                    elif i == len(sentiment_positions) - 1:
-                        sentiments[s] = "E-" + sentiment
+def tags_to_json(tokens, sentiments, tagging_schema):
+    assert tagging_schema in ["IOB", "BIOES"], "Schema must be either `IOB` or `BIOES`."
+
+    tokens2sentiments = []
+    for i, (token, sentiment) in enumerate(zip(tokens, sentiments)):
+        if tagging_schema == "IOB":
+            # just ignore outside sentiments for the moment
+            if sentiment == "O":
+                tokens2sentiments.append([[token], sentiment])
+
+            # if it is starting, then we expect something after, so we append the first one
+            if sentiment.startswith("B-"):
+                tokens2sentiments.append([[token], sentiment[2:]])
+
+            # if it is inside, we have different options
+            if sentiment.startswith("I-"):
+                # if this is the first sentiment, then we just treat it as a beginning one
+                if len(tokens2sentiments) == 0:
+                    tokens2sentiments.append([[token], sentiment[2:]])
+                else:
+                    # otherwise, there is some other sentiment before
+                    last_token, last_sentiment = tokens2sentiments[-1]
+                    # if the last sentiment is not equal to the one we're considering, then we treat this
+                    # again as a beginning one.
+                    if last_sentiment != sentiment[2:]:
+                        tokens2sentiments.append([[token], sentiment[2:]])
+                    # otherwise, the sentiment before was a B or a I with the same sentiment
+                    # therefore this token is part of the same target instance, with the same sentiment associated
                     else:
-                        sentiments[s] = "I-" + sentiment
-            processed_data["targets"].append(sentiments)
+                        tokens2sentiments[-1] = [last_token + [token], sentiment[2:]]
+        elif tagging_schema == "BIOES":
+            # just ignore outside sentiments for the moment
+            if sentiment == "O":
+                tokens2sentiments.append([[token], sentiment])
 
-    return processed_data
+            # if it is single, then we just need to append that
+            if sentiment.startswith("S-"):
+                tokens2sentiments.append([[token], sentiment[2:]])
+
+            # if it is starting, then we expect something after, so we append the first one
+            if sentiment.startswith("B-"):
+                tokens2sentiments.append([[token], sentiment[2:]])
+
+            # if it is inside, we have different options
+            if sentiment.startswith("I-") or sentiment.startswith("E-"):
+                # if this is the first sentiment, then we just treat it as a beginning one
+                if len(tokens2sentiments) == 0:
+                    tokens2sentiments.append([[token], sentiment[2:]])
+                else:
+                    # otherwise, there is some other sentiment before
+                    last_token, last_sentiment = tokens2sentiments[-1]
+                    # if the last sentiment is not equal to the one we're considering, then we treat this
+                    # again as a beginning one.
+                    if last_sentiment != sentiment[2:]:
+                        tokens2sentiments.append([[token], sentiment[2:]])
+                    # if the previous sentiment was a single target word or an ending one
+                    # we treat the one we're considering again as a beginning one
+                    elif sentiments[i - 1].startswith("S-") or sentiments[
+                        i - 1
+                    ].startswith("E-"):
+                        tokens2sentiments.append([[token], sentiment[2:]])
+                    # otherwise, the sentiment before was a B or a I with the same sentiment
+                    # therefore this token is part of the same target instance, with the same sentiment associated
+                    else:
+                        tokens2sentiments[-1] = [last_token + [token], sentiment[2:]]
+
+    return tokens2sentiments
 
 
-def iob_to_json(
+def postprocess(
     tokens: List[str],
     sentiments: List[str],
     tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
+    tagging_schema: str,
 ):
-    tokens2sentiments = []
-    for i, (token, sentiment) in enumerate(zip(tokens, sentiments)):
-        # just ignore outside sentiments for the moment
-        if sentiment == "O":
-            tokens2sentiments.append([[token], sentiment])
-
-        # if it is starting, then we expect something after, so we append the first one
-        if sentiment.startswith("B-"):
-            tokens2sentiments.append([[token], sentiment[2:]])
-
-        # if it is inside, we have different options
-        if sentiment.startswith("I-"):
-            # if this is the first sentiment, then we just treat it as a beginning one
-            if len(tokens2sentiments) == 0:
-                tokens2sentiments.append([[token], sentiment[2:]])
-            else:
-                # otherwise, there is some other sentiment before
-                last_token, last_sentiment = tokens2sentiments[-1]
-                # if the last sentiment is not equal to the one we're considering, then we treat this
-                # again as a beginning one.
-                if last_sentiment != sentiment[2:]:
-                    tokens2sentiments.append([[token], sentiment[2:]])
-                # otherwise, the sentiment before was a B or a I with the same sentiment
-                # therefore this token is part of the same target instance, with the same sentiment associated
-                else:
-                    tokens2sentiments[-1] = [last_token + [token], sentiment[2:]]
-
-    if isinstance(tokenizer, TreebankWordTokenizer):
-        detokenizer = TreebankWordDetokenizer()
-        return {
-            "targets": [
-                (detokenizer.detokenize(tk), sentiment)
-                for tk, sentiment in tokens2sentiments
-                if sentiment != "O"
-            ]
-        }
-    else:
-        return {
-            "targets": [
-                (tokenizer.convert_tokens_to_string(tk), sentiment)
-                for tk, sentiment in tokens2sentiments
-                if sentiment != "O"
-            ]
-        }
-
-
-def bioes_to_json(
-    tokens: List[str],
-    sentiments: List[str],
-    tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
-):
-    tokens2sentiments = []
-    for i, (token, sentiment) in enumerate(zip(tokens, sentiments)):
-        # just ignore outside sentiments for the moment
-        if sentiment == "O":
-            tokens2sentiments.append([[token], sentiment])
-
-        # if it is single, then we just need to append that
-        if sentiment.startswith("S-"):
-            tokens2sentiments.append([[token], sentiment[2:]])
-
-        # if it is starting, then we expect something after, so we append the first one
-        if sentiment.startswith("B-"):
-            tokens2sentiments.append([[token], sentiment[2:]])
-
-        # if it is inside, we have different options
-        if sentiment.startswith("I-") or sentiment.startswith("E-"):
-            # if this is the first sentiment, then we just treat it as a beginning one
-            if len(tokens2sentiments) == 0:
-                tokens2sentiments.append([[token], sentiment[2:]])
-            else:
-                # otherwise, there is some other sentiment before
-                last_token, last_sentiment = tokens2sentiments[-1]
-                # if the last sentiment is not equal to the one we're considering, then we treat this
-                # again as a beginning one.
-                if last_sentiment != sentiment[2:]:
-                    tokens2sentiments.append([[token], sentiment[2:]])
-                # if the previous sentiment was a single target word or an ending one
-                # we treat the one we're considering again as a beginning one
-                elif sentiments[i - 1].startswith("S-") or sentiments[i - 1].startswith(
-                    "E-"
-                ):
-                    tokens2sentiments.append([[token], sentiment[2:]])
-                # otherwise, the sentiment before was a B or a I with the same sentiment
-                # therefore this token is part of the same target instance, with the same sentiment associated
-                else:
-                    tokens2sentiments[-1] = [last_token + [token], sentiment[2:]]
+    tokens2sentiments = tags_to_json(tokens, sentiments, tagging_schema)
 
     if isinstance(tokenizer, TreebankWordTokenizer):
         detokenizer = TreebankWordDetokenizer()
@@ -241,8 +214,9 @@ class ABSADataset(Dataset):
         self.raw_data = raw_data
         self.tokenizer = tokenizer
         self.train = train
-        preprocess_fun = json_to_iob if tagging_schema == "IOB" else json_to_bioes
-        preprocessed_data = preprocess_fun(raw_data, tokenizer=tokenizer, train=train)
+        preprocessed_data = preprocess(
+            raw_data, tokenizer=tokenizer, tagging_schema=tagging_schema, train=train
+        )
         self.sentences = preprocessed_data["sentences"]
         self.targets = preprocessed_data["targets"]
         self.vocabulary = vocabulary
