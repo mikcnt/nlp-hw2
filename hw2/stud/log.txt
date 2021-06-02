@@ -1,0 +1,60 @@
+EPOCH 0: f1 extraction: 0.000, f1 evaluation: 0.000
+EPOCH 1: f1 extraction: 0.540, f1 evaluation: 0.150
+EPOCH 2: f1 extraction: 0.601, f1 evaluation: 0.136
+EPOCH 3: f1 extraction: 0.620, f1 evaluation: 0.168
+EPOCH 4: f1 extraction: 0.538, f1 evaluation: 0.131
+EPOCH 5: f1 extraction: 0.603, f1 evaluation: 0.191
+EPOCH 6: f1 extraction: 0.623, f1 evaluation: 0.170
+EPOCH 7: f1 extraction: 0.605, f1 evaluation: 0.237
+EPOCH 8: f1 extraction: 0.603, f1 evaluation: 0.256
+EPOCH 9: f1 extraction: 0.592, f1 evaluation: 0.274
+
+
+EPOCH 0: f1 extraction: 0.000, f1 evaluation: 0.000
+EPOCH 1: f1 extraction: 0.559, f1 evaluation: 0.149
+EPOCH 2: f1 extraction: 0.601, f1 evaluation: 0.137
+EPOCH 3: f1 extraction: 0.615, f1 evaluation: 0.153
+EPOCH 4: f1 extraction: 0.483, f1 evaluation: 0.109
+EPOCH 5: f1 extraction: 0.592, f1 evaluation: 0.184
+EPOCH 6: f1 extraction: 0.565, f1 evaluation: 0.149
+EPOCH 7: f1 extraction: 0.553, f1 evaluation: 0.222
+EPOCH 8: f1 extraction: 0.623, f1 evaluation: 0.236
+EPOCH 9: f1 extraction: 0.596, f1 evaluation: 0.260
+
+
+EPOCH 0: f1 extraction: 0.000, f1 evaluation: 0.000
+EPOCH 1: f1 extraction: 0.556, f1 evaluation: 0.159
+EPOCH 2: f1 extraction: 0.601, f1 evaluation: 0.138
+EPOCH 3: f1 extraction: 0.631, f1 evaluation: 0.159
+EPOCH 4: f1 extraction: 0.625, f1 evaluation: 0.145
+EPOCH 5: f1 extraction: 0.648, f1 evaluation: 0.202
+EPOCH 6: f1 extraction: 0.648, f1 evaluation: 0.172
+EPOCH 7: f1 extraction: 0.643, f1 evaluation: 0.254
+EPOCH 8: f1 extraction: 0.643, f1 evaluation: 0.242
+EPOCH 9: f1 extraction: 0.634, f1 evaluation: 0.279
+
+
+
+EPOCH 0: f1 extraction: 0.000, f1 evaluation: 0.000
+EPOCH 1: f1 extraction: 0.562, f1 evaluation: 0.092
+EPOCH 2: f1 extraction: 0.621, f1 evaluation: 0.139
+EPOCH 3: f1 extraction: 0.593, f1 evaluation: 0.147
+EPOCH 4: f1 extraction: 0.638, f1 evaluation: 0.143
+EPOCH 5: f1 extraction: 0.636, f1 evaluation: 0.169
+EPOCH 6: f1 extraction: 0.619, f1 evaluation: 0.164
+EPOCH 7: f1 extraction: 0.624, f1 evaluation: 0.206
+EPOCH 8: f1 extraction: 0.610, f1 evaluation: 0.152
+EPOCH 9: f1 extraction: 0.643, f1 evaluation: 0.244
+
+
+
+EPOCH 0: f1 extraction: 0.000, f1 evaluation: 0.000
+EPOCH 1: f1 extraction: 0.566, f1 evaluation: 0.147
+EPOCH 2: f1 extraction: 0.606, f1 evaluation: 0.136
+EPOCH 3: f1 extraction: 0.641, f1 evaluation: 0.162
+EPOCH 4: f1 extraction: 0.631, f1 evaluation: 0.145
+EPOCH 5: f1 extraction: 0.651, f1 evaluation: 0.206
+EPOCH 6: f1 extraction: 0.650, f1 evaluation: 0.182
+EPOCH 7: f1 extraction: 0.656, f1 evaluation: 0.255
+EPOCH 8: f1 extraction: 0.639, f1 evaluation: 0.243
+EPOCH 9: f1 extraction: 0.638, f1 evaluation: 0.259

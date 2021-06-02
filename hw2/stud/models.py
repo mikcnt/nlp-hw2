@@ -56,8 +56,9 @@ class ABSABert(nn.Module):
         self.bert = BertModel.from_pretrained("bert-base-cased")
         bert_output_dim = self.bert.config.hidden_size
         self.dropout = nn.Dropout(hparams.dropout)
-
         self.classifier = nn.Linear(bert_output_dim, hparams.num_classes)
+
+        self.crf = CRF(num_tags=hparams.num_classes, batch_first=True)
 
     def forward(self, x, x_lengths):
         attention_mask = torch.ones_like(x)

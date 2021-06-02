@@ -19,11 +19,18 @@ if __name__ == "__main__":
     # set seeds for reproducibility
     pl.seed_everything(42)
     # paths
-    train_path = "../../data/laptops_train.json"
-    dev_path = "../../data/laptops_dev.json"
+    restaurants_train_path = "../../data/restaurants_train.json"
+    restaurants_dev_path = "../../data/restaurants_dev.json"
+    laptops_train_path = "../../data/laptops_train.json"
+    laptops_dev_path = "../../data/laptops_dev.json"
     # read raw data
-    train_raw_data = read_data(train_path)
-    dev_raw_data = read_data(dev_path)
+    restaurants_train_raw_data = read_data(restaurants_train_path)
+    restaurants_dev_raw_data = read_data(restaurants_dev_path)
+    laptops_train_raw_data = read_data(laptops_train_path)
+    laptops_dev_raw_data = read_data(laptops_dev_path)
+
+    train_raw_data = restaurants_train_raw_data + laptops_train_raw_data
+    dev_raw_data = restaurants_dev_raw_data + laptops_dev_raw_data
 
     # --------- CONSTANTS ---------
     USE_BERT = False
@@ -72,10 +79,11 @@ if __name__ == "__main__":
         "embedding_dim": pretrained_embeddings.shape[1],
         "num_classes": len(sentiments_vocabulary),
         "bidirectional": True,
-        "num_layers": 3,
+        "num_layers": 2,
         "dropout": 0.5,
         "lr": 0.001,
         "weight_decay": 0.0,
+        "batch_size": 16,
         "use_bert": USE_BERT,
         "tagging_schema": TAGGING_SCHEMA,
         "use_crf": True,
@@ -88,6 +96,7 @@ if __name__ == "__main__":
         dev_raw_data,
         vocabulary,
         sentiments_vocabulary,
+        batch_size=hparams["batch_size"],
         tagging_schema=TAGGING_SCHEMA,
         tokenizer=tokenizer,
     )

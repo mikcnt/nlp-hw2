@@ -266,12 +266,14 @@ class DataModuleABSA(pl.LightningDataModule):
         vocabulary,
         sentiments_vocabulary,
         tagging_schema: str,
+        batch_size: int,
         tokenizer=None,
     ):
 
         super(DataModuleABSA, self).__init__()
         self.train_data = train_data
         self.dev_data = dev_data
+        self.batch_size = batch_size
         self.vocabulary = vocabulary
         self.sentiments_vocabulary = sentiments_vocabulary
         self.tagging_schema = tagging_schema
@@ -295,10 +297,16 @@ class DataModuleABSA(pl.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.trainset, batch_size=16, shuffle=True, collate_fn=pad_collate
+            self.trainset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            collate_fn=pad_collate,
         )
 
     def val_dataloader(self):
         return DataLoader(
-            self.devset, batch_size=16, shuffle=False, collate_fn=pad_collate
+            self.devset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            collate_fn=pad_collate,
         )
