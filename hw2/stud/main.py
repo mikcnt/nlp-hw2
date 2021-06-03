@@ -33,7 +33,7 @@ if __name__ == "__main__":
     dev_raw_data = restaurants_dev_raw_data + laptops_dev_raw_data
 
     # --------- CONSTANTS ---------
-    USE_BERT = False
+    USE_BERT = True
     TAGGING_SCHEMA = "IOB"
     assert TAGGING_SCHEMA in [
         "IOB",
@@ -86,7 +86,7 @@ if __name__ == "__main__":
         "batch_size": 16,
         "use_bert": USE_BERT,
         "tagging_schema": TAGGING_SCHEMA,
-        "use_crf": True,
+        "use_crf": False,
     }
 
     # --------- TRAINER ---------
@@ -124,7 +124,7 @@ if __name__ == "__main__":
     trainer = pl.Trainer(
         gpus=1,
         val_check_interval=1.0,
-        max_epochs=10,
+        max_epochs=1000,
         callbacks=[early_stop_callback, checkpoint_callback],
         num_sanity_val_steps=0,
         # overfit_batches=1,
