@@ -117,7 +117,7 @@ if __name__ == "__main__":
         dirpath="./saved_checkpoints",
         filename="{epoch}_{f1_extraction:.4f}_{f1_evaluation:.4f}",
         monitor="f1_evaluation",
-        save_top_k=3,
+        save_top_k=0,
         save_last=False,
         mode="max",
     )
@@ -135,6 +135,6 @@ if __name__ == "__main__":
         num_sanity_val_steps=0,
         logger=wandb_logger,
         overfit_batches=overfit_batches,
-        resume_from_checkpoint="../../model/epoch=37_f1_extraction=0.6887_f1_evaluation=0.4330.ckpt",
+        resume_from_checkpoint=None,
     )
     trainer.fit(model, datamodule=data_module)

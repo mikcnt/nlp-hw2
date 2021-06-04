@@ -61,8 +61,6 @@ class PlABSAModel(pl.LightningModule):
         text_predictions = self._batch_sentiments_to_tags(
             sentences_raw, predictions, lengths
         )
-        print(text_predictions)
-        exit()
         return {
             "logits": logits,
             "predictions": predictions,
