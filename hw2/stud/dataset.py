@@ -87,8 +87,6 @@ def preprocess(
 
 
 def tags_to_json(tokens, sentiments, tagging_schema):
-    assert tagging_schema in ["IOB", "BIOES"], "Schema must be either `IOB` or `BIOES`."
-
     tokens2sentiments = []
     for i, (token, sentiment) in enumerate(zip(tokens, sentiments)):
         if tagging_schema == "IOB":
@@ -115,7 +113,10 @@ def tags_to_json(tokens, sentiments, tagging_schema):
                     # otherwise, the sentiment before was a B or a I with the same sentiment
                     # therefore this token is part of the same target instance, with the same sentiment associated
                     else:
-                        tokens2sentiments[-1] = [last_token + [token], sentiment[2:]]
+                        tokens2sentiments[-1] = [
+                            last_token + [token],
+                            sentiment[2:],
+                        ]
         elif tagging_schema == "BIOES":
             # just ignore outside sentiments for the moment
             if sentiment == "O":
@@ -150,36 +151,12 @@ def tags_to_json(tokens, sentiments, tagging_schema):
                     # otherwise, the sentiment before was a B or a I with the same sentiment
                     # therefore this token is part of the same target instance, with the same sentiment associated
                     else:
-                        tokens2sentiments[-1] = [last_token + [token], sentiment[2:]]
+                        tokens2sentiments[-1] = [
+                            last_token + [token],
+                            sentiment[2:],
+                        ]
 
     return tokens2sentiments
-
-
-def postprocess(
-    tokens: List[str],
-    sentiments: List[str],
-    tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
-    tagging_schema: str,
-):
-    tokens2sentiments = tags_to_json(tokens, sentiments, tagging_schema)
-
-    if isinstance(tokenizer, TreebankWordTokenizer):
-        detokenizer = TreebankWordDetokenizer()
-        return {
-            "targets": [
-                (detokenizer.detokenize(tk), sentiment)
-                for tk, sentiment in tokens2sentiments
-                if sentiment != "O"
-            ]
-        }
-    else:
-        return {
-            "targets": [
-                (tokenizer.convert_tokens_to_string(tk), sentiment)
-                for tk, sentiment in tokens2sentiments
-                if sentiment != "O"
-            ]
-        }
 
 
 def build_vocab(data: List[str], specials: List[str], min_freq: int = 1) -> Vocab:

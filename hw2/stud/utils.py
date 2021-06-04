@@ -29,7 +29,7 @@ def pad_collate(batch):
     except:
         yy_pad = None
 
-    # lengths of inputs == lenghts of outputs
+    # lengths
     lengths = [len(x) for x in xx]
 
     batch = {

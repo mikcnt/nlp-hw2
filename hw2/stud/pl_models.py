@@ -2,16 +2,17 @@ from typing import *
 import torch
 import pytorch_lightning as pl
 from nltk import TreebankWordTokenizer
+from nltk.tokenize.treebank import TreebankWordDetokenizer
 from torch import nn, optim
 from torchtext.vocab import Vocab
 from transformers import BertTokenizer, AdamW
 
+from stud.dataset import tags_to_json
 from stud.metrics import (
     F1SentimentExtraction,
     F1SentimentEvaluation,
 )
 from stud.models import ABSAModel, ABSABert
-from stud.tokens_converter import TokenToSentimentsConverter
 
 
 class PlABSAModel(pl.LightningModule):
@@ -30,22 +31,13 @@ class PlABSAModel(pl.LightningModule):
         vocabulary = vocabularies["vocabulary"]
         sentiments_vocabulary = vocabularies["sentiments_vocabulary"]
         self.sentiments_vocabulary = sentiments_vocabulary
+        self.tokenizer = tokenizer
         self.loss_function = nn.CrossEntropyLoss(
             ignore_index=sentiments_vocabulary["<pad>"]
         )
         if train:
-            self.f1_extraction = F1SentimentExtraction(
-                vocabulary=vocabulary,
-                sentiments_vocabulary=sentiments_vocabulary,
-                tokenizer=tokenizer,
-                tagging_schema=self.hparams.tagging_schema,
-            )
-            self.f1_evaluation = F1SentimentEvaluation(
-                vocabulary=vocabulary,
-                sentiments_vocabulary=sentiments_vocabulary,
-                tokenizer=tokenizer,
-                tagging_schema=self.hparams.tagging_schema,
-            )
+            self.f1_extraction = F1SentimentExtraction(device=self.device)
+            self.f1_evaluation = F1SentimentEvaluation(device=self.device)
 
         self.model = (
             ABSAModel(self.hparams, embeddings)
@@ -53,71 +45,54 @@ class PlABSAModel(pl.LightningModule):
             else ABSABert(self.hparams)
         )
 
-        self.sentiments_converter = TokenToSentimentsConverter(
-            vocabulary,
-            sentiments_vocabulary,
-            tokenizer,
-            self.hparams.tagging_schema,
-        )
-
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         sentences = batch["inputs"]
         lengths = batch["lengths"]
-        logits = self.model(sentences, lengths)
-        predictions = torch.argmax(logits, -1)
-        return {"logits": logits, "predictions": predictions}
-
-    def predict(self, batch: Dict[str, torch.Tensor]):
-        # sentences = batch["inputs"]
-        lengths = batch["lengths"]
         raw_data = batch["raw"]
-        predictions = self(batch)["predictions"]
+        sentences_raw = [x["text"] for x in raw_data]
 
-        sentences = [x["text"] for x in raw_data]
-        token_pred_sentiments = self.sentiments_converter.batch_sentiments_to_tags(
-            sentences, predictions, lengths
-        )
-
-        # processed_output = self.sentiments_converter.postprocess(
-        #     sentences, predictions, lengths
-        # )
-        return token_pred_sentiments
-
-    def step(
-        self, batch: Dict[str, torch.Tensor], compute_f1=False
-    ) -> Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor]:
-        print("PREDICT OUTPUT:\n", self.predict(batch))
-        sentences = batch["inputs"]
-        lengths = batch["lengths"]
-        labels = batch["outputs"]
-        raw_data = batch["raw"]
-        # We receive one batch of data and perform a forward pass:
         logits = self.model(sentences, lengths)
-
-        # compute loss and f1 score
-        if self.hparams.use_crf:
-            mask = labels != self.sentiments_vocabulary["<pad>"]
-            loss = -1 * self.model.crf(logits, labels, mask=mask)
+        if not self.hparams.use_crf:
+            predictions = torch.argmax(logits, -1)
+        else:
             predictions = torch.tensor(
                 self.model.crf.decode(logits), device=self.device
             )
+        text_predictions = self._batch_sentiments_to_tags(
+            sentences_raw, predictions, lengths
+        )
+        print(text_predictions)
+        exit()
+        return {
+            "logits": logits,
+            "predictions": predictions,
+            "text_predictions": text_predictions,
+        }
+
+    def predict(self, batch: Dict[str, torch.Tensor]):
+        text_predictions = self(batch)["text_predictions"]
+        return text_predictions
+
+    def step(self, batch: Dict[str, torch.Tensor], compute_f1=False):
+        output = self(batch)
+        labels = batch["outputs"]
+        logits = output["logits"]
+        mask = labels != self.sentiments_vocabulary["<pad>"]
+        text_predictions = output["text_predictions"]
+        text_gt = batch["raw"]
+
+        # compute loss and f1 score
+        if self.hparams.use_crf:
+            loss = -1 * self.model.crf(logits, labels, mask=mask)
         else:
-            mask = labels != self.sentiments_vocabulary["<pad>"]
-            active_loss = mask.view(-1)
-            active_logits = logits.view(-1, self.hparams.num_classes)[active_loss]
-            active_labels = labels.view(-1)[active_loss]
+            mask_unrolled = mask.view(-1)
+            active_logits = logits.view(-1, self.hparams.num_classes)[mask_unrolled]
+            active_labels = labels.view(-1)[mask_unrolled]
             loss = self.loss_function(active_logits, active_labels)
-            # loss = self.loss_function(
-            #     logits.view(-1, logits.shape[-1]), labels.view(-1)
-            # )
-            predictions = torch.argmax(logits, -1)
+
         if compute_f1:
-            f1_extraction = self.f1_extraction(
-                sentences, predictions, raw_data, lengths
-            )
-            f1_evaluation = self.f1_evaluation(
-                sentences, predictions, raw_data, lengths
-            )
+            f1_extraction = self.f1_extraction(text_predictions, text_gt)
+            f1_evaluation = self.f1_evaluation(text_predictions, text_gt)
             return loss, f1_extraction, f1_evaluation
         else:
             return loss
@@ -126,7 +101,7 @@ class PlABSAModel(pl.LightningModule):
         self, batch: Dict[str, torch.Tensor], batch_idx: Optional[int]
     ) -> torch.Tensor:
         train_loss = self.step(batch)
-        # Log loss and f1 score
+        # Log loss
         self.log_dict(
             {
                 "train_loss": train_loss,
@@ -173,3 +148,50 @@ class PlABSAModel(pl.LightningModule):
             )
         else:
             return AdamW(self.parameters(), lr=2e-5)
+
+    def _postprocess(self, tokens: List[str], sentiments: List[str]):
+        tokens2sentiments = tags_to_json(
+            tokens, sentiments, self.hparams.tagging_schema
+        )
+
+        if isinstance(self.tokenizer, TreebankWordTokenizer):
+            detokenizer = TreebankWordDetokenizer()
+            return {
+                "targets": [
+                    (detokenizer.detokenize(tk), sentiment)
+                    for tk, sentiment in tokens2sentiments
+                    if sentiment != "O"
+                ]
+            }
+        else:
+            return {
+                "targets": [
+                    (self.tokenizer.convert_tokens_to_string(tk), sentiment)
+                    for tk, sentiment in tokens2sentiments
+                    if sentiment != "O"
+                ]
+            }
+
+    def _batch_sentiments_to_tags(self, raw_data, batch_sentiments, lengths):
+        to_process_list: List[List[int]] = batch_sentiments.tolist()
+
+        # remove padded elements
+        for i, length in enumerate(lengths):
+            to_process_list[i] = to_process_list[i][:length]
+
+        # extract tokens and associated sentiments
+        tokens = [self.tokenizer.tokenize(x) for x in raw_data]
+
+        # convert indexes to tokens + IOB format sentiments
+        processed_iob_sentiments = [
+            [self.sentiments_vocabulary.itos[x] for x in batch]
+            for batch in to_process_list
+        ]
+
+        # convert IOB sentiments to simple | target words - sentiment | format
+        words_to_sentiment = [
+            self._postprocess(token, output)
+            for token, output in zip(tokens, processed_iob_sentiments)
+        ]
+
+        return words_to_sentiment
