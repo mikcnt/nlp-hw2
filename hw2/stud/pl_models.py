@@ -11,6 +11,7 @@ from stud.metrics import (
     F1SentimentEvaluation,
 )
 from stud.models import ABSAModel, ABSABert
+from stud.tokens_converter import TokenToSentimentsConverter
 
 
 class PlABSAModel(pl.LightningModule):
@@ -20,6 +21,7 @@ class PlABSAModel(pl.LightningModule):
         vocabularies: Dict[str, Vocab],
         embeddings: torch.Tensor,
         tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
+        train=True,
         *args,
         **kwargs,
     ) -> None:
@@ -28,29 +30,34 @@ class PlABSAModel(pl.LightningModule):
         vocabulary = vocabularies["vocabulary"]
         sentiments_vocabulary = vocabularies["sentiments_vocabulary"]
         self.sentiments_vocabulary = sentiments_vocabulary
-        # self.sentiments_converter = TokenToSentimentsConverter(
-        #     vocabulary, sentiments_vocabulary, tokenizer=tokenizer
-        # )
         self.loss_function = nn.CrossEntropyLoss(
             ignore_index=sentiments_vocabulary["<pad>"]
         )
-        self.f1_extraction = F1SentimentExtraction(
-            vocabulary=vocabulary,
-            sentiments_vocabulary=sentiments_vocabulary,
-            tokenizer=tokenizer,
-            tagging_schema=self.hparams.tagging_schema,
-        )
-        self.f1_evaluation = F1SentimentEvaluation(
-            vocabulary=vocabulary,
-            sentiments_vocabulary=sentiments_vocabulary,
-            tokenizer=tokenizer,
-            tagging_schema=self.hparams.tagging_schema,
-        )
+        if train:
+            self.f1_extraction = F1SentimentExtraction(
+                vocabulary=vocabulary,
+                sentiments_vocabulary=sentiments_vocabulary,
+                tokenizer=tokenizer,
+                tagging_schema=self.hparams.tagging_schema,
+            )
+            self.f1_evaluation = F1SentimentEvaluation(
+                vocabulary=vocabulary,
+                sentiments_vocabulary=sentiments_vocabulary,
+                tokenizer=tokenizer,
+                tagging_schema=self.hparams.tagging_schema,
+            )
 
         self.model = (
             ABSAModel(self.hparams, embeddings)
             if not self.hparams.use_bert
             else ABSABert(self.hparams)
+        )
+
+        self.sentiments_converter = TokenToSentimentsConverter(
+            vocabulary,
+            sentiments_vocabulary,
+            tokenizer,
+            self.hparams.tagging_schema,
         )
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -60,18 +67,26 @@ class PlABSAModel(pl.LightningModule):
         predictions = torch.argmax(logits, -1)
         return {"logits": logits, "predictions": predictions}
 
-    def forward_processed(self, batch: Dict[str, torch.Tensor]):
-        sentences = batch["inputs"]
+    def predict(self, batch: Dict[str, torch.Tensor]):
+        # sentences = batch["inputs"]
         lengths = batch["lengths"]
+        raw_data = batch["raw"]
         predictions = self(batch)["predictions"]
-        processed_output = self.sentiments_converter.postprocess(
+
+        sentences = [x["text"] for x in raw_data]
+        token_pred_sentiments = self.sentiments_converter.batch_sentiments_to_tags(
             sentences, predictions, lengths
         )
-        return processed_output
+
+        # processed_output = self.sentiments_converter.postprocess(
+        #     sentences, predictions, lengths
+        # )
+        return token_pred_sentiments
 
     def step(
         self, batch: Dict[str, torch.Tensor], compute_f1=False
     ) -> Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor]:
+        print("PREDICT OUTPUT:\n", self.predict(batch))
         sentences = batch["inputs"]
         lengths = batch["lengths"]
         labels = batch["outputs"]

@@ -135,6 +135,6 @@ if __name__ == "__main__":
         num_sanity_val_steps=0,
         logger=wandb_logger,
         overfit_batches=overfit_batches,
-        resume_from_checkpoint="./saved_checkpoints/epoch=9_f1_extraction=0.6682_f1_evaluation=0.3518.ckpt",
+        resume_from_checkpoint="../../model/epoch=37_f1_extraction=0.6887_f1_evaluation=0.4330.ckpt",
     )
     trainer.fit(model, datamodule=data_module)

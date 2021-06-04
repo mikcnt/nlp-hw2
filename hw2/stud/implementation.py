@@ -4,10 +4,11 @@ from typing import List, Tuple, Dict
 import torch
 from torch.utils.data import DataLoader
 from torchtext.vocab import Vectors
+from transformers import BertTokenizer
 
 from stud.dataset import preprocess, ABSADataset
 from stud.pl_models import PlABSAModel
-from stud.utils import load_pickle, pad_collate
+from stud.utils import load_pickle, pad_collate, compute_pretrained_embeddings
 from model import Model
 import random
 
@@ -168,7 +169,7 @@ class RandomBaseline(Model):
         return preds
 
 
-class StudentModel(Model):
+class StudentModel_(Model):
     def __init__(self, device):
         path = "model/epoch=19_f1_val=14.8297.ckpt"
         vocabulary_path = "model/vocabulary.pkl"
@@ -260,5 +261,53 @@ class StudentModel(Model):
         all_outputs = []
         for batch in loader:
             output = self.model.forward_processed(batch)
+            all_outputs += output
+        return all_outputs
+
+
+class StudentModel(Model):
+    def __init__(self, device):
+        path = "model/epoch=37_f1_extraction=0.6887_f1_evaluation=0.4330.ckpt"
+        vocabulary_path = "model/vocabulary.pkl"
+        sentiments_vocabulary_path = "model/sentiments_vocabulary.pkl"
+        embeddings_path = "model/glove.6B.300d.txt"
+        cache_path = "model/.vector_cache/"
+        self.vocabulary = load_pickle(vocabulary_path)
+        self.sentiments_vocabulary = load_pickle(sentiments_vocabulary_path)
+        vocabularies = {
+            "vocabulary": self.vocabulary,
+            "sentiments_vocabulary": self.sentiments_vocabulary,
+        }
+        self.tagging_schema = "IOB"
+        self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
+        pretrained_embeddings = compute_pretrained_embeddings(
+            path=embeddings_path,
+            cache=cache_path,
+            vocabulary=self.vocabulary,
+        )
+
+        self.model = PlABSAModel.load_from_checkpoint(
+            path,
+            map_location=device,
+            vocabularies=vocabularies,
+            embeddings=pretrained_embeddings,
+            tokenizer=self.tokenizer,
+            train=False,
+        )
+        self.model.eval()
+
+    def predict(self, samples: List[Dict]) -> List[Dict]:
+        data = ABSADataset(
+            raw_data=samples,
+            vocabulary=self.vocabulary,
+            sentiments_vocabulary=self.sentiments_vocabulary,
+            tagging_schema=self.tagging_schema,
+            tokenizer=self.tokenizer,
+            train=False,
+        )
+        loader = DataLoader(data, batch_size=1, shuffle=False, collate_fn=pad_collate)
+        all_outputs = []
+        for batch in loader:
+            output = self.model.predict(batch)
             all_outputs += output
         return all_outputs
