@@ -26,9 +26,15 @@ class F1SentimentExtraction(Metric):
             tokenizer,
             tagging_schema,
         )
-        self.add_state("tp", default=torch.tensor(0.0), dist_reduce_fx="sum")
-        self.add_state("fp", default=torch.tensor(0.0), dist_reduce_fx="sum")
-        self.add_state("fn", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state(
+            "tp", default=torch.tensor(0.0, device="cuda"), dist_reduce_fx="sum"
+        )
+        self.add_state(
+            "fp", default=torch.tensor(0.0, device="cuda"), dist_reduce_fx="sum"
+        )
+        self.add_state(
+            "fn", default=torch.tensor(0.0, device="cuda"), dist_reduce_fx="sum"
+        )
 
     # noinspection PyMethodOverriding
     def update(
@@ -107,9 +113,21 @@ class F1SentimentEvaluation(Metric):
             self.sentiment_types = ["positive", "negative", "neutral", "conflict"]
 
         for sent in self.sentiment_types + ["ALL"]:
-            self.add_state(f"tp_{sent}", default=torch.tensor(0), dist_reduce_fx="sum")
-            self.add_state(f"fp_{sent}", default=torch.tensor(0), dist_reduce_fx="sum")
-            self.add_state(f"fn_{sent}", default=torch.tensor(0), dist_reduce_fx="sum")
+            self.add_state(
+                f"tp_{sent}",
+                default=torch.tensor(0, device="cuda"),
+                dist_reduce_fx="sum",
+            )
+            self.add_state(
+                f"fp_{sent}",
+                default=torch.tensor(0, device="cuda"),
+                dist_reduce_fx="sum",
+            )
+            self.add_state(
+                f"fn_{sent}",
+                default=torch.tensor(0, device="cuda"),
+                dist_reduce_fx="sum",
+            )
 
     def compute_sent(self, sentiment, label, pred):
         if self.mode == "Aspect Sentiment":
@@ -248,7 +266,7 @@ class F1SentimentEvaluation(Metric):
             [scores[ent_type]["r"] for ent_type in self.sentiment_types]
         ) / len(self.sentiment_types)
 
-        return scores["ALL"]["Macro_f1"]
+        return torch.tensor(scores["ALL"]["Macro_f1"], device='cuda')
 
     def reset(self):
         for sent in self.sentiment_types + ["ALL"]:

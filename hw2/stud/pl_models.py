@@ -87,9 +87,14 @@ class PlABSAModel(pl.LightningModule):
                 self.model.crf.decode(logits), device=self.device
             )
         else:
-            loss = self.loss_function(
-                logits.view(-1, logits.shape[-1]), labels.view(-1)
-            )
+            mask = labels != self.sentiments_vocabulary["<pad>"]
+            active_loss = mask.view(-1)
+            active_logits = logits.view(-1, self.hparams.num_classes)[active_loss]
+            active_labels = labels.view(-1)[active_loss]
+            loss = self.loss_function(active_logits, active_labels)
+            # loss = self.loss_function(
+            #     logits.view(-1, logits.shape[-1]), labels.view(-1)
+            # )
             predictions = torch.argmax(logits, -1)
         if compute_f1:
             f1_extraction = self.f1_extraction(
@@ -112,6 +117,8 @@ class PlABSAModel(pl.LightningModule):
                 "train_loss": train_loss,
             },
             prog_bar=True,
+            on_step=False,
+            on_epoch=True,
         )
 
         # Return loss to update weights

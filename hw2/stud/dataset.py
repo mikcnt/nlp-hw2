@@ -301,6 +301,8 @@ class DataModuleABSA(pl.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=True,
             collate_fn=pad_collate,
+            num_workers=8,
+            pin_memory=True,
         )
 
     def val_dataloader(self):
@@ -309,4 +311,6 @@ class DataModuleABSA(pl.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=False,
             collate_fn=pad_collate,
+            num_workers=8,
+            pin_memory=True,
         )

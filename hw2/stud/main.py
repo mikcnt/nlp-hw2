@@ -2,6 +2,7 @@ import pytorch_lightning as pl
 from nltk import TreebankWordTokenizer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.loggers import WandbLogger
 from transformers import BertTokenizer
 
 from stud.dataset import (
@@ -28,9 +29,10 @@ if __name__ == "__main__":
     restaurants_dev_raw_data = read_data(restaurants_dev_path)
     laptops_train_raw_data = read_data(laptops_train_path)
     laptops_dev_raw_data = read_data(laptops_dev_path)
-
-    train_raw_data = restaurants_train_raw_data + laptops_train_raw_data
-    dev_raw_data = restaurants_dev_raw_data + laptops_dev_raw_data
+    # train_raw_data = restaurants_train_raw_data + laptops_train_raw_data
+    # dev_raw_data = restaurants_dev_raw_data + laptops_dev_raw_data
+    train_raw_data = laptops_train_raw_data
+    dev_raw_data = laptops_dev_raw_data
 
     # --------- CONSTANTS ---------
     USE_BERT = True
@@ -114,19 +116,25 @@ if __name__ == "__main__":
     checkpoint_callback = ModelCheckpoint(
         dirpath="./saved_checkpoints",
         filename="{epoch}_{f1_extraction:.4f}_{f1_evaluation:.4f}",
-        monitor="f1_extraction",
-        save_top_k=0,
+        monitor="f1_evaluation",
+        save_top_k=3,
         save_last=False,
         mode="max",
     )
+
+    # logger
+    overfit_batches = 0
+    wandb_logger = WandbLogger(offline=True, project="nlp-hw2")
 
     # define trainer and train
     trainer = pl.Trainer(
         gpus=1,
         val_check_interval=1.0,
         max_epochs=1000,
-        callbacks=[early_stop_callback, checkpoint_callback],
+        callbacks=[checkpoint_callback],
         num_sanity_val_steps=0,
-        # overfit_batches=1,
+        logger=wandb_logger,
+        overfit_batches=overfit_batches,
+        resume_from_checkpoint="./saved_checkpoints/epoch=9_f1_extraction=0.6682_f1_evaluation=0.3518.ckpt",
     )
     trainer.fit(model, datamodule=data_module)

@@ -57,10 +57,10 @@ class ABSAModel(nn.Module):
 class ABSABert(nn.Module):
     def __init__(self, hparams):
         super(ABSABert, self).__init__()
-        # self.bert = BertModel.from_pretrained("bert-base-cased")
-        self.bert = BertForTokenClassification.from_pretrained(
-            "bert-base-cased", num_labels=hparams.num_classes
-        )
+        self.bert = BertModel.from_pretrained("bert-base-cased")
+        # self.bert = BertForTokenClassification.from_pretrained(
+        #     "bert-base-cased", num_labels=hparams.num_classes
+        # )
         bert_output_dim = self.bert.config.hidden_size
         self.dropout = nn.Dropout(hparams.dropout)
         self.classifier = nn.Linear(bert_output_dim, hparams.num_classes)
@@ -72,11 +72,11 @@ class ABSABert(nn.Module):
         for i, l in enumerate(x_lengths):
             attention_mask[i, l:] = 0
 
-        # output = self.bert(x, attention_mask)["last_hidden_state"]
-        # output = self.dropout(output)
-        #
-        # output = self.classifier(output)
-        # return output
+        output = self.bert(x, attention_mask)["last_hidden_state"]
+        output = self.dropout(output)
 
-        output = self.bert(x, attention_mask=attention_mask)["logits"]
+        output = self.classifier(output)
         return output
+
+        # output = self.bert(x, attention_mask=attention_mask)["logits"]
+        # return output
