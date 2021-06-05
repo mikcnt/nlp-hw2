@@ -36,7 +36,7 @@ if __name__ == "__main__":
 
     # --------- CONSTANTS ---------
     USE_BERT = True
-    TAGGING_SCHEMA = "BIOES"
+    TAGGING_SCHEMA = "IOB"
     assert TAGGING_SCHEMA in [
         "IOB",
         "BIOES",
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     )
 
     # logger
-    overfit_batches = 1
+    overfit_batches = 0
     wandb_logger = WandbLogger(offline=True, project="nlp-hw2")
 
     # define trainer and train

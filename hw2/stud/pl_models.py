@@ -61,7 +61,7 @@ class PlABSAModel(pl.LightningModule):
                 self.model.crf.decode(logits), device=self.device
             )
         text_predictions = self._batch_sentiments_to_tags(
-            sentences_raw, batch["outputs"], lengths
+            sentences_raw, predictions, lengths
         )
         return {
             "logits": logits,

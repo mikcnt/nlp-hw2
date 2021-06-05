@@ -54,13 +54,26 @@ class ABSABert(nn.Module):
         self.bert = BertModel.from_pretrained("bert-base-cased")
         bert_output_dim = self.bert.config.hidden_size
         self.dropout = nn.Dropout(hparams.dropout)
-        self.classifier = nn.Linear(bert_output_dim, hparams.num_classes)
+        self.lstm = nn.LSTM(
+            bert_output_dim,
+            hparams.hidden_dim,
+            bidirectional=hparams.bidirectional,
+            num_layers=hparams.num_layers,
+            dropout=hparams.dropout if hparams.num_layers > 1 else 0,
+        )
+        lstm_output_dim = (
+            hparams.hidden_dim
+            if hparams.bidirectional is False
+            else hparams.hidden_dim * 2
+        )
+        self.classifier = nn.Linear(lstm_output_dim, hparams.num_classes)
 
         self.crf = CRF(num_tags=hparams.num_classes, batch_first=True)
 
     def forward(self, x, x_lengths, attention_mask=None):
         output = self.bert(x, attention_mask)["last_hidden_state"]
         output = self.dropout(output)
-
+        output, _ = lstm_padded(self.lstm, output, x_lengths)
+        output = self.dropout(output)
         output = self.classifier(output)
         return output
