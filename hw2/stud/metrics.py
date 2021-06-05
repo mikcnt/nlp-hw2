@@ -5,7 +5,7 @@ from typing import *
 
 
 class F1SentimentExtraction(Metric):
-    def __init__(self, device):
+    def __init__(self, device: str) -> None:
         super().__init__(dist_sync_on_step=False)
         self.device = device
         self.add_state("tp", default=torch.tensor(0.0), dist_reduce_fx="sum")
@@ -13,7 +13,9 @@ class F1SentimentExtraction(Metric):
         self.add_state("fn", default=torch.tensor(0.0), dist_reduce_fx="sum")
 
     # noinspection PyMethodOverriding
-    def update(self, preds_text: torch.Tensor, gt_text: torch.Tensor):
+    def update(
+        self, preds_text: List[Dict[str, Any]], gt_text: List[Dict[str, Any]]
+    ) -> None:
         for label, pred in zip(gt_text, preds_text):
             pred_terms = {term_pred[0] for term_pred in pred["targets"]}
             gt_terms = {term_gt[1] for term_gt in label["targets"]}
@@ -21,7 +23,7 @@ class F1SentimentExtraction(Metric):
             self.fp += len(pred_terms - gt_terms)
             self.fn += len(gt_terms - pred_terms)
 
-    def compute(self):
+    def compute(self) -> torch.Tensor:
         precision = (
             self.tp / (self.tp + self.fp)
             if self.fp != 0
@@ -39,18 +41,14 @@ class F1SentimentExtraction(Metric):
         )
         return f1
 
-    def reset(self):
+    def reset(self) -> None:
         self.add_state("tp", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self.add_state("fp", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self.add_state("fn", default=torch.tensor(0.0), dist_reduce_fx="sum")
 
 
 class F1SentimentEvaluation(Metric):
-    def __init__(
-        self,
-        device,
-        mode="Aspect Sentiment",
-    ):
+    def __init__(self, device: str, mode: str = "Aspect Sentiment") -> None:
         super().__init__(dist_sync_on_step=False)
         self.device = device
         self.mode = mode
@@ -82,7 +80,9 @@ class F1SentimentEvaluation(Metric):
             )
 
     # noinspection PyMethodOverriding
-    def update(self, preds_text: torch.Tensor, gt_text: torch.Tensor):
+    def update(
+        self, preds_text: List[Dict[str, Any]], gt_text: List[Dict[str, Any]]
+    ) -> None:
 
         for label, pred in zip(gt_text, preds_text):
             for sent_type in self.sentiment_types + ["ALL"]:
@@ -97,7 +97,7 @@ class F1SentimentEvaluation(Metric):
                     f"fn_{sent_type}", self.fn(sent_type) + len(gt_sent - pred_sent)
                 )
 
-    def compute(self):
+    def compute(self) -> torch.Tensor:
         scores = defaultdict(dict)
         for sent_type in self.sentiment_types:
             if self.tp(sent_type):
@@ -155,7 +155,7 @@ class F1SentimentEvaluation(Metric):
 
         return torch.tensor(scores["ALL"]["Macro_f1"], device=self.device)
 
-    def reset(self):
+    def reset(self) -> None:
         for sent in self.sentiment_types + ["ALL"]:
             self.add_state(
                 f"tp_{sent}", default=torch.tensor(0.0), dist_reduce_fx="sum"
@@ -167,7 +167,9 @@ class F1SentimentEvaluation(Metric):
                 f"fn_{sent}", default=torch.tensor(0.0), dist_reduce_fx="sum"
             )
 
-    def compute_sent(self, sentiment, label, pred):
+    def compute_sent(
+        self, sentiment: str, label: Dict[str, Any], pred: Dict[str, Any]
+    ) -> Tuple[Set, Set]:
         if self.mode == "Aspect Sentiment":
             pred_sent = {
                 (term_pred[0], term_pred[1])
@@ -202,21 +204,21 @@ class F1SentimentEvaluation(Metric):
                 if term_pred[1] == sentiment
             }
         else:
-            return None
+            raise ValueError
 
         return pred_sent, gt_sent
 
-    def get_state(self, name):
+    def get_state(self, name: str) -> Any:
         return getattr(self, name)
 
-    def set_state(self, name, value):
+    def set_state(self, name: str, value: Any) -> None:
         setattr(self, name, value)
 
-    def tp(self, sent):
+    def tp(self, sent: str) -> torch.Tensor:
         return self.get_state(f"tp_{sent}")
 
-    def fp(self, sent):
+    def fp(self, sent: str) -> torch.Tensor:
         return self.get_state(f"fp_{sent}")
 
-    def fn(self, sent):
+    def fn(self, sent: str) -> torch.Tensor:
         return self.get_state(f"fn_{sent}")

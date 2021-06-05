@@ -1,5 +1,4 @@
 import pytorch_lightning as pl
-import torch.optim.optimizer
 from nltk import TreebankWordTokenizer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
@@ -54,7 +53,6 @@ if __name__ == "__main__":
     train_data = preprocess(
         train_raw_data, tokenizer=tokenizer, tagging_schema=TAGGING_SCHEMA
     )
-
     # --------- VOCABULARIES ---------
     vocabulary = build_vocab(
         train_data["sentences"], specials=["<pad>", "<unk>"], min_freq=2
@@ -124,7 +122,7 @@ if __name__ == "__main__":
     )
 
     # logger
-    overfit_batches = 0
+    overfit_batches = 1
     wandb_logger = WandbLogger(offline=True, project="nlp-hw2")
 
     # define trainer and train

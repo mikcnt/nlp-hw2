@@ -1,7 +1,6 @@
 from typing import *
 import torch
 import pytorch_lightning as pl
-import torchmetrics
 from nltk import TreebankWordTokenizer
 from nltk.tokenize.treebank import TreebankWordDetokenizer
 from torch import nn, optim
@@ -45,7 +44,9 @@ class PlABSAModel(pl.LightningModule):
             else ABSABert(self.hparams)
         )
 
-    def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(
+        self, batch: Dict[str, torch.Tensor]
+    ) -> Dict[str, Union[torch.Tensor, List]]:
         sentences = batch["inputs"]
         lengths = batch["lengths"]
         attention_mask = batch["attention_mask"]
@@ -60,7 +61,7 @@ class PlABSAModel(pl.LightningModule):
                 self.model.crf.decode(logits), device=self.device
             )
         text_predictions = self._batch_sentiments_to_tags(
-            sentences_raw, predictions, lengths
+            sentences_raw, batch["outputs"], lengths
         )
         return {
             "logits": logits,
@@ -68,11 +69,13 @@ class PlABSAModel(pl.LightningModule):
             "text_predictions": text_predictions,
         }
 
-    def predict(self, batch: Dict[str, torch.Tensor]):
+    def predict(self, batch: Dict[str, torch.Tensor]) -> List[Dict[str, Any]]:
         text_predictions = self(batch)["text_predictions"]
         return text_predictions
 
-    def step(self, batch: Dict[str, torch.Tensor], compute_f1=False):
+    def step(
+        self, batch: Dict[str, torch.Tensor], compute_f1=False
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         output = self(batch)
         labels = batch["outputs"]
         logits = output["logits"]
@@ -114,7 +117,7 @@ class PlABSAModel(pl.LightningModule):
 
     def validation_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: Optional[int]
-    ) -> Tuple[Any, Any]:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         val_loss, f1_extraction, f1_evaluation = self.step(batch, compute_f1=True)
         # Log loss and f1 score
         self.log_dict(
@@ -152,7 +155,7 @@ class PlABSAModel(pl.LightningModule):
                 # correct_bias=False,
             )
 
-    def _postprocess(self, tokens: List[str], sentiments: List[str]):
+    def _postprocess(self, tokens: List[str], sentiments: List[str]) -> Dict[str, Any]:
         tokens2sentiments = tags_to_json(
             tokens, sentiments, self.hparams.tagging_schema
         )
@@ -175,12 +178,18 @@ class PlABSAModel(pl.LightningModule):
                 ]
             }
 
-    def _batch_sentiments_to_tags(self, raw_data, batch_sentiments, lengths):
-        to_process_list: List[List[int]] = batch_sentiments.tolist()
+    def _batch_sentiments_to_tags(
+        self,
+        raw_data: List[Dict[str, Any]],
+        batch_sentiments: torch.Tensor,
+        lengths: List[int],
+    ) -> List[Dict[str, Any]]:
+        # convert sentiments to list
+        sentiments_list = batch_sentiments.tolist()
 
         # remove padded elements
         for i, length in enumerate(lengths):
-            to_process_list[i] = to_process_list[i][:length]
+            sentiments_list[i] = sentiments_list[i][:length]
 
         # extract tokens and associated sentiments
         tokens = [self.tokenizer.tokenize(x) for x in raw_data]
@@ -188,7 +197,7 @@ class PlABSAModel(pl.LightningModule):
         # convert indexes to tokens + IOB format sentiments
         processed_iob_sentiments = [
             [self.sentiments_vocabulary.itos[x] for x in batch]
-            for batch in to_process_list
+            for batch in sentiments_list
         ]
 
         # convert IOB sentiments to simple | target words - sentiment | format
