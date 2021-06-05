@@ -10,8 +10,10 @@ from tqdm import tqdm
 from typing import List, Dict, Any, Union, Optional
 from torch.utils.data import Dataset, DataLoader
 from torchtext.vocab import Vocab
+
+from stud.bert_embedder import BERTEmbedder
 from stud.utils import pad_collate
-from transformers import BertTokenizer
+from transformers import BertTokenizer, BertModel, BertConfig
 
 # set up tokenizers
 nltk.download("punkt")
@@ -71,13 +73,18 @@ def preprocess(
     raw_data: List[Dict[str, Any]],
     tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
     tagging_schema: Optional[str] = None,
+    bert_embedder=None,
     train: bool = True,
 ):
     """Convert data in JSON format to IOB schema."""
-    processed_data = {"sentences": [], "targets": []}
+    processed_data = {"sentences": [], "targets": [], "bert_embeddings": []}
     for d in raw_data:
         text = d["text"]
         tokens = tokenizer.tokenize(text)
+        if bert_embedder is not None:
+            bert_embeddings = bert_embedder.embed_sentences([tokens])[0].to("cpu")
+            processed_data["bert_embeddings"].append(bert_embeddings)
+
         processed_data["sentences"].append(tokens)
         if train:
             sentiments = json_to_tags(d, tokenizer, tagging_schema)
@@ -185,14 +192,34 @@ class ABSADataset(Dataset):
         sentiments_vocabulary: Vocab,
         tagging_schema: str,
         tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
+        use_bert: bool = True,
         train: bool = True,
     ) -> None:
         super(ABSADataset, self).__init__()
         self.raw_data = raw_data
         self.tokenizer = tokenizer
+        if use_bert:
+            bert_config = BertConfig.from_pretrained(
+                "bert-base-cased", output_hidden_states=True
+            )
+            bert_tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
+            bert_model = BertModel.from_pretrained(
+                "bert-base-cased", config=bert_config
+            )
+            bert_embedder = BERTEmbedder(
+                bert_model=bert_model,
+                bert_tokenizer=bert_tokenizer,
+                device="cuda",
+            )
+        else:
+            bert_embedder = None
         self.train = train
         preprocessed_data = preprocess(
-            raw_data, tokenizer=tokenizer, tagging_schema=tagging_schema, train=train
+            raw_data,
+            tokenizer=tokenizer,
+            tagging_schema=tagging_schema,
+            bert_embedder=bert_embedder,
+            train=train,
         )
         self.sentences = preprocessed_data["sentences"]
         self.targets = preprocessed_data["targets"]

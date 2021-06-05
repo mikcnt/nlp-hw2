@@ -43,11 +43,12 @@ if __name__ == "__main__":
     ], "Tagging schema should be either IOB or BIOES."
 
     # --------- TOKENIZER ---------
-    tokenizer = (
-        BertTokenizer.from_pretrained("bert-base-cased")
-        if USE_BERT
-        else TreebankWordTokenizer()
-    )
+    tokenizer = TreebankWordTokenizer()
+    # (
+    #     BertTokenizer.from_pretrained("bert-base-cased")
+    #     if USE_BERT
+    #     else TreebankWordTokenizer()
+    # )
 
     # --------- TAG DATA: IOB OR BIOES ---------
     train_data = preprocess(

@@ -30,12 +30,22 @@ def pad_collate(batch):
     except:
         yy_pad = None
 
+    # pad bert embeddings
+    try:
+        bert_embeddings = [x['bert_embeddings'] for x in batch]
+        bert_embeddings_pad = pad_sequence(bert_embeddings, batch_first=True, padding_value=0)
+        print("this has been done")
+    except:
+        bert_embeddings_pad = None
+
+
     # lengths
     lengths = [len(x) for x in xx]
 
     batch = {
         "inputs": xx_pad,
         "outputs": yy_pad,
+        "bert_embeddings": bert_embeddings_pad,
         "lengths": lengths,
         "attention_mask": attention_mask,
         "raw": [x["raw"] for x in batch],
