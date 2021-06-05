@@ -1,4 +1,5 @@
 import pytorch_lightning as pl
+import torch.optim.optimizer
 from nltk import TreebankWordTokenizer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
@@ -36,7 +37,7 @@ if __name__ == "__main__":
 
     # --------- CONSTANTS ---------
     USE_BERT = True
-    TAGGING_SCHEMA = "IOB"
+    TAGGING_SCHEMA = "BIOES"
     assert TAGGING_SCHEMA in [
         "IOB",
         "BIOES",
@@ -83,7 +84,7 @@ if __name__ == "__main__":
         "bidirectional": True,
         "num_layers": 2,
         "dropout": 0.5,
-        "lr": 0.001,
+        "lr": 2e-5 if USE_BERT else 1e-3,
         "weight_decay": 0.0,
         "batch_size": 16,
         "use_bert": USE_BERT,

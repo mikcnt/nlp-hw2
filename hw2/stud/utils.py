@@ -21,6 +21,7 @@ def pad_collate(batch):
     # pad x
     xx = [x["inputs"] for x in batch]
     xx_pad = pad_sequence(xx, batch_first=True, padding_value=0)
+    attention_mask = xx_pad != 0
 
     # pad y
     try:
@@ -36,6 +37,7 @@ def pad_collate(batch):
         "inputs": xx_pad,
         "outputs": yy_pad,
         "lengths": lengths,
+        "attention_mask": attention_mask,
         "raw": [x["raw"] for x in batch],
     }
 

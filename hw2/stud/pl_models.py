@@ -1,6 +1,7 @@
 from typing import *
 import torch
 import pytorch_lightning as pl
+import torchmetrics
 from nltk import TreebankWordTokenizer
 from nltk.tokenize.treebank import TreebankWordDetokenizer
 from torch import nn, optim
@@ -29,11 +30,10 @@ class PlABSAModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(hparams)
         vocabulary = vocabularies["vocabulary"]
-        sentiments_vocabulary = vocabularies["sentiments_vocabulary"]
-        self.sentiments_vocabulary = sentiments_vocabulary
+        self.sentiments_vocabulary = vocabularies["sentiments_vocabulary"]
         self.tokenizer = tokenizer
         self.loss_function = nn.CrossEntropyLoss(
-            ignore_index=sentiments_vocabulary["<pad>"]
+            ignore_index=self.sentiments_vocabulary["<pad>"]
         )
         if train:
             self.f1_extraction = F1SentimentExtraction(device=self.device)
@@ -48,10 +48,11 @@ class PlABSAModel(pl.LightningModule):
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         sentences = batch["inputs"]
         lengths = batch["lengths"]
+        attention_mask = batch["attention_mask"]
         raw_data = batch["raw"]
         sentences_raw = [x["text"] for x in raw_data]
 
-        logits = self.model(sentences, lengths)
+        logits = self.model(sentences, lengths, attention_mask)
         if not self.hparams.use_crf:
             predictions = torch.argmax(logits, -1)
         else:
@@ -75,18 +76,17 @@ class PlABSAModel(pl.LightningModule):
         output = self(batch)
         labels = batch["outputs"]
         logits = output["logits"]
-        mask = labels != self.sentiments_vocabulary["<pad>"]
         text_predictions = output["text_predictions"]
         text_gt = batch["raw"]
 
         # compute loss and f1 score
         if self.hparams.use_crf:
+            mask = batch["attention_mask"]
             loss = -1 * self.model.crf(logits, labels, mask=mask)
         else:
-            mask_unrolled = mask.view(-1)
-            active_logits = logits.view(-1, self.hparams.num_classes)[mask_unrolled]
-            active_labels = labels.view(-1)[mask_unrolled]
-            loss = self.loss_function(active_logits, active_labels)
+            logits = logits.view(-1, self.hparams.num_classes)
+            labels = labels.view(-1)
+            loss = self.loss_function(logits, labels)
 
         if compute_f1:
             f1_extraction = self.f1_extraction(text_predictions, text_gt)
@@ -145,7 +145,12 @@ class PlABSAModel(pl.LightningModule):
                 weight_decay=self.hparams.weight_decay,
             )
         else:
-            return AdamW(self.parameters(), lr=2e-5)
+            return AdamW(
+                self.parameters(),
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+                # correct_bias=False,
+            )
 
     def _postprocess(self, tokens: List[str], sentiments: List[str]):
         tokens2sentiments = tags_to_json(

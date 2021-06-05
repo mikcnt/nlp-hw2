@@ -3,11 +3,7 @@ from torch import nn
 from typing import *
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from torchcrf import CRF
-from transformers import (
-    BertModel,
-    BertForTokenClassification,
-    BertForSequenceClassification,
-)
+from transformers import BertModel
 
 
 def lstm_padded(
@@ -19,12 +15,10 @@ def lstm_padded(
 
 
 class ABSAModel(nn.Module):
-    # we provide the hyperparameters as input
     def __init__(self, hparams, embeddings=None):
         super(ABSAModel, self).__init__()
         self.word_embedding = nn.Embedding(hparams.vocab_size, hparams.embedding_dim)
         if embeddings is not None:
-            print("initializing embeddings from pretrained")
             self.word_embedding.weight.data.copy_(embeddings)
 
         self.lstm = nn.LSTM(
@@ -45,7 +39,7 @@ class ABSAModel(nn.Module):
         self.dropout = nn.Dropout(hparams.dropout)
         self.classifier = nn.Linear(lstm_output_dim, hparams.num_classes)
 
-    def forward(self, x, x_lengths):
+    def forward(self, x, x_lengths, attention_mask=None):
         embeddings = self.word_embedding(x)
         embeddings = self.dropout(embeddings)
         o, o_lengths = lstm_padded(self.lstm, embeddings, x_lengths)
@@ -64,11 +58,7 @@ class ABSABert(nn.Module):
 
         self.crf = CRF(num_tags=hparams.num_classes, batch_first=True)
 
-    def forward(self, x, x_lengths):
-        attention_mask = torch.ones_like(x)
-        for i, l in enumerate(x_lengths):
-            attention_mask[i, l:] = 0
-
+    def forward(self, x, x_lengths, attention_mask=None):
         output = self.bert(x, attention_mask)["last_hidden_state"]
         output = self.dropout(output)
 
