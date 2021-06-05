@@ -198,6 +198,7 @@ class ABSADataset(Dataset):
         super(ABSADataset, self).__init__()
         self.raw_data = raw_data
         self.tokenizer = tokenizer
+        self.use_bert = use_bert
         if use_bert:
             bert_config = BertConfig.from_pretrained(
                 "bert-base-cased", output_hidden_states=True
@@ -223,6 +224,7 @@ class ABSADataset(Dataset):
         )
         self.sentences = preprocessed_data["sentences"]
         self.targets = preprocessed_data["targets"]
+        self.bert_embeddings = preprocessed_data["bert_embeddings"]
         self.vocabulary = vocabulary
         self.sentiments_vocabulary = sentiments_vocabulary
 
@@ -247,6 +249,10 @@ class ABSADataset(Dataset):
             sentence = self.sentences[i]
             data_dict["raw"] = self.raw_data[i]
             data_dict["inputs"] = torch.LongTensor(self.encode_text(sentence))
+
+            if self.use_bert:
+                data_dict["bert_embeddings"] = self.bert_embeddings[i]
+
             if self.train:
                 targets = self.targets[i]
                 data_dict["outputs"] = torch.LongTensor(
