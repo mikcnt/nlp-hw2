@@ -49,13 +49,16 @@ class ABSAModel(nn.Module):
 
 
 class ABSABert(nn.Module):
-    def __init__(self, hparams):
+    def __init__(self, hparams, embeddings=None):
         super(ABSABert, self).__init__()
-        self.bert = BertModel.from_pretrained("bert-base-cased")
+        self.word_embedding = nn.Embedding(hparams.vocab_size, hparams.embedding_dim)
+        if embeddings is not None:
+            self.word_embedding.weight.data.copy_(embeddings)
+
         bert_output_dim = self.bert.config.hidden_size
         self.dropout = nn.Dropout(hparams.dropout)
         self.lstm = nn.LSTM(
-            bert_output_dim,
+            bert_output_dim + hparams.embedding_dim,
             hparams.hidden_dim,
             bidirectional=hparams.bidirectional,
             num_layers=hparams.num_layers,
@@ -70,10 +73,12 @@ class ABSABert(nn.Module):
 
         self.crf = CRF(num_tags=hparams.num_classes, batch_first=True)
 
-    def forward(self, x, x_lengths, attention_mask=None):
-        output = self.bert(x, attention_mask)["last_hidden_state"]
-        output = self.dropout(output)
-        output, _ = lstm_padded(self.lstm, output, x_lengths)
+    def forward(self, x, x_lengths, attention_mask=None, bert_embeddings=None):
+        bert_embeddings = self.dropout(bert_embeddings)
+        embeddings = self.word_embedding(x)
+        embeddings = self.dropout(embeddings)
+        bert_w_glove = torch.cat((bert_embeddings, embeddings), dim=-1)
+        output, _ = lstm_padded(self.lstm, bert_w_glove, x_lengths)
         output = self.dropout(output)
         output = self.classifier(output)
         return output

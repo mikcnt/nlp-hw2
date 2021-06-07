@@ -41,7 +41,7 @@ class PlABSAModel(pl.LightningModule):
         self.model = (
             ABSAModel(self.hparams, embeddings)
             if not self.hparams.use_bert
-            else ABSABert(self.hparams)
+            else ABSABert(self.hparams, embeddings)
         )
 
     def forward(
@@ -52,8 +52,9 @@ class PlABSAModel(pl.LightningModule):
         attention_mask = batch["attention_mask"]
         raw_data = batch["raw"]
         sentences_raw = [x["text"] for x in raw_data]
+        bert_embeddings = batch['bert_embeddings']
 
-        logits = self.model(sentences, lengths, attention_mask)
+        logits = self.model(sentences, lengths, attention_mask, bert_embeddings)
         if not self.hparams.use_crf:
             predictions = torch.argmax(logits, -1)
         else:
