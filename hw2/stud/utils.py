@@ -32,12 +32,17 @@ def pad_collate(batch):
 
     # pad bert embeddings
     try:
-        bert_embeddings = [x['bert_embeddings'] for x in batch]
-        bert_embeddings_pad = pad_sequence(bert_embeddings, batch_first=True, padding_value=0)
+        bert_embeddings = [x["bert_embeddings"] for x in batch]
+        bert_embeddings_pad = pad_sequence(
+            bert_embeddings, batch_first=True, padding_value=0
+        )
         print("this has been done")
     except:
         bert_embeddings_pad = None
 
+    # pad pos tags
+    pos = [x["pos_tags"] for x in batch]
+    pos_pad = pad_sequence(pos, batch_first=True, padding_value=0)
 
     # lengths
     lengths = [len(x) for x in xx]
@@ -45,6 +50,7 @@ def pad_collate(batch):
     batch = {
         "inputs": xx_pad,
         "outputs": yy_pad,
+        "pos_tags": pos_pad,
         "bert_embeddings": bert_embeddings_pad,
         "lengths": lengths,
         "attention_mask": attention_mask,

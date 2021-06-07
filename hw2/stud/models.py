@@ -51,14 +51,26 @@ class ABSAModel(nn.Module):
 class ABSABert(nn.Module):
     def __init__(self, hparams, embeddings=None):
         super(ABSABert, self).__init__()
+        self.hparams = hparams
         self.word_embedding = nn.Embedding(hparams.vocab_size, hparams.embedding_dim)
         if embeddings is not None:
             self.word_embedding.weight.data.copy_(embeddings)
 
+        if hparams.use_pos:
+            self.pos_embedding = nn.Embedding(
+                hparams.pos_vocab_size, hparams.pos_embedding_dim
+            )
+
         bert_output_dim = self.bert.config.hidden_size
         self.dropout = nn.Dropout(hparams.dropout)
+
+        lstm_input_size = bert_output_dim + hparams.embedding_dim
+
+        if hparams.use_pos:
+            lstm_input_size += hparams.pos_embedding_dim
+
         self.lstm = nn.LSTM(
-            bert_output_dim + hparams.embedding_dim,
+            lstm_input_size,
             hparams.hidden_dim,
             bidirectional=hparams.bidirectional,
             num_layers=hparams.num_layers,
@@ -73,12 +85,23 @@ class ABSABert(nn.Module):
 
         self.crf = CRF(num_tags=hparams.num_classes, batch_first=True)
 
-    def forward(self, x, x_lengths, attention_mask=None, bert_embeddings=None):
+    def forward(
+        self,
+        x,
+        x_lengths,
+        pos_tags,
+        attention_mask=None,
+        bert_embeddings=None,
+    ):
         bert_embeddings = self.dropout(bert_embeddings)
         embeddings = self.word_embedding(x)
         embeddings = self.dropout(embeddings)
-        bert_w_glove = torch.cat((bert_embeddings, embeddings), dim=-1)
-        output, _ = lstm_padded(self.lstm, bert_w_glove, x_lengths)
+        all_embeddings = torch.cat((bert_embeddings, embeddings), dim=-1)
+        if self.hparams.use_pos:
+            pos_embeddings = self.pos_embedding(pos_tags)
+            pos_embeddings = self.dropout(pos_embeddings)
+            all_embeddings = torch.cat((all_embeddings, pos_embeddings), dim=1)
+        output, _ = lstm_padded(self.lstm, all_embeddings, x_lengths)
         output = self.dropout(output)
         output = self.classifier(output)
         return output

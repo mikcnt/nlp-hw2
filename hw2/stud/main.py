@@ -56,12 +56,14 @@ if __name__ == "__main__":
     )
     # --------- VOCABULARIES ---------
     vocabulary = build_vocab(
-        train_data["sentences"], specials=["<pad>", "<unk>"], min_freq=2
+        train_data["sentences"], specials=["<pad>", "<unk>"], min_freq=1
     )
     sentiments_vocabulary = build_vocab(train_data["targets"], specials=["<pad>"])
+    pos_vocabulary = build_vocab(train_data["pos_tags"], specials=["<pad>", "<unk>"])
     vocabularies = {
         "vocabulary": vocabulary,
         "sentiments_vocabulary": sentiments_vocabulary,
+        "pos_vocabulary": pos_vocabulary,
     }
     # save vocabularies to file
     save_pickle(vocabulary, "../../model/vocabulary.pkl")
@@ -89,6 +91,9 @@ if __name__ == "__main__":
         "use_bert": USE_BERT,
         "tagging_schema": TAGGING_SCHEMA,
         "use_crf": False,
+        "use_pos": True,
+        "pos_embedding_dim": 300,
+        "pos_vocab_size": len(pos_vocabulary),
     }
 
     # --------- TRAINER ---------
@@ -96,8 +101,7 @@ if __name__ == "__main__":
     data_module = DataModuleABSA(
         train_raw_data,
         dev_raw_data,
-        vocabulary,
-        sentiments_vocabulary,
+        vocabularies,
         batch_size=hparams["batch_size"],
         tagging_schema=TAGGING_SCHEMA,
         tokenizer=tokenizer,

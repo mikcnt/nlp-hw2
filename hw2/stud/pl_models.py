@@ -49,12 +49,19 @@ class PlABSAModel(pl.LightningModule):
     ) -> Dict[str, Union[torch.Tensor, List]]:
         sentences = batch["inputs"]
         lengths = batch["lengths"]
+        pos_tags = batch["pos_tags"]
         attention_mask = batch["attention_mask"]
         raw_data = batch["raw"]
         sentences_raw = [x["text"] for x in raw_data]
-        bert_embeddings = batch['bert_embeddings']
+        bert_embeddings = batch["bert_embeddings"]
 
-        logits = self.model(sentences, lengths, attention_mask, bert_embeddings)
+        logits = self.model(
+            sentences,
+            lengths,
+            pos_tags,
+            attention_mask,
+            bert_embeddings,
+        )
         if not self.hparams.use_crf:
             predictions = torch.argmax(logits, -1)
         else:

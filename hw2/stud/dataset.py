@@ -4,6 +4,7 @@ import torch
 import pytorch_lightning as pl
 from collections import Counter
 
+import nltk
 from nltk import TreebankWordTokenizer
 from nltk.tokenize.treebank import TreebankWordDetokenizer
 from tqdm import tqdm
@@ -77,15 +78,22 @@ def preprocess(
     train: bool = True,
 ):
     """Convert data in JSON format to IOB schema."""
-    processed_data = {"sentences": [], "targets": [], "bert_embeddings": []}
+    processed_data = {
+        "sentences": [],
+        "targets": [],
+        "pos_tags": [],
+        "bert_embeddings": [],
+    }
     for d in raw_data:
         text = d["text"]
         tokens = tokenizer.tokenize(text)
+        pos_tags = [pos[1] for pos in nltk.pos_tag(tokens)]
         if bert_embedder is not None:
             bert_embeddings = bert_embedder.embed_sentences([tokens])[0].to("cpu")
             processed_data["bert_embeddings"].append(bert_embeddings)
 
         processed_data["sentences"].append(tokens)
+        processed_data["pos_tags"].append(pos_tags)
         if train:
             sentiments = json_to_tags(d, tokenizer, tagging_schema)
             processed_data["targets"].append(sentiments)
@@ -188,8 +196,7 @@ class ABSADataset(Dataset):
     def __init__(
         self,
         raw_data: List[Dict[str, Any]],
-        vocabulary: Vocab,
-        sentiments_vocabulary: Vocab,
+        vocabularies: Dict[str, Vocab],
         tagging_schema: str,
         tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
         use_bert: bool = True,
@@ -224,31 +231,39 @@ class ABSADataset(Dataset):
         )
         self.sentences = preprocessed_data["sentences"]
         self.targets = preprocessed_data["targets"]
+        self.pos_tags = preprocessed_data["pos_tags"]
         self.bert_embeddings = preprocessed_data["bert_embeddings"]
-        self.vocabulary = vocabulary
-        self.sentiments_vocabulary = sentiments_vocabulary
+        self.vocabulary = vocabularies["vocabulary"]
+        self.sentiments_vocabulary = vocabularies["sentiments_vocabulary"]
+        self.pos_vocabulary = vocabularies["pos_vocabulary"]
 
         self.encoded_data = []
         self.index_dataset()
 
-    def encode_text(self, sentence: List[str]) -> List[int]:
+    def encode_text(self, sentence: List[str], vocab) -> List[int]:
         if isinstance(self.tokenizer, BertTokenizer):
             indices = self.tokenizer.convert_tokens_to_ids(sentence)
         else:
             indices = []
             for w in sentence:
-                if w in self.vocabulary.stoi:
-                    indices.append(self.vocabulary[w])
+                if w in vocab.stoi:
+                    indices.append(vocab[w])
                 else:
-                    indices.append(self.vocabulary.unk_index)
+                    indices.append(vocab.unk_index)
         return indices
 
     def index_dataset(self):
         for i in range(len(self.sentences)):
             data_dict = {}
             sentence = self.sentences[i]
+            pos_tags = self.pos_tags[i]
             data_dict["raw"] = self.raw_data[i]
-            data_dict["inputs"] = torch.LongTensor(self.encode_text(sentence))
+            data_dict["inputs"] = torch.LongTensor(
+                self.encode_text(sentence, self.vocabulary)
+            )
+            data_dict["pos_tags"] = torch.LongTensor(
+                self.encode_text(pos_tags, self.pos_vocabulary)
+            )
 
             if self.use_bert:
                 data_dict["bert_embeddings"] = self.bert_embeddings[i]
@@ -273,8 +288,7 @@ class DataModuleABSA(pl.LightningDataModule):
         self,
         train_data,
         dev_data,
-        vocabulary,
-        sentiments_vocabulary,
+        vocabularies,
         tagging_schema: str,
         batch_size: int,
         tokenizer=None,
@@ -284,23 +298,20 @@ class DataModuleABSA(pl.LightningDataModule):
         self.train_data = train_data
         self.dev_data = dev_data
         self.batch_size = batch_size
-        self.vocabulary = vocabulary
-        self.sentiments_vocabulary = sentiments_vocabulary
+        self.vocabularies = vocabularies
         self.tagging_schema = tagging_schema
         self.tokenizer = tokenizer
 
     def setup(self, stage=None):
         self.trainset = ABSADataset(
             self.train_data,
-            self.vocabulary,
-            self.sentiments_vocabulary,
+            self.vocabularies,
             tagging_schema=self.tagging_schema,
             tokenizer=self.tokenizer,
         )
         self.devset = ABSADataset(
             self.dev_data,
-            self.vocabulary,
-            self.sentiments_vocabulary,
+            self.vocabularies,
             tagging_schema=self.tagging_schema,
             tokenizer=self.tokenizer,
         )
