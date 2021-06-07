@@ -100,7 +100,7 @@ class ABSABert(nn.Module):
         if self.hparams.use_pos:
             pos_embeddings = self.pos_embedding(pos_tags)
             pos_embeddings = self.dropout(pos_embeddings)
-            all_embeddings = torch.cat((all_embeddings, pos_embeddings), dim=1)
+            all_embeddings = torch.cat((all_embeddings, pos_embeddings), dim=-1)
         output, _ = lstm_padded(self.lstm, all_embeddings, x_lengths)
         output = self.dropout(output)
         output = self.classifier(output)
