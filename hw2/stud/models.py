@@ -56,18 +56,33 @@ class ABSABert(nn.Module):
         if embeddings is not None:
             self.word_embedding.weight.data.copy_(embeddings)
 
+        lstm_input_size = hparams.embedding_dim
+
         if hparams.use_pos:
             self.pos_embedding = nn.Embedding(
                 hparams.pos_vocab_size, hparams.pos_embedding_dim
             )
+            lstm_input_size += hparams.pos_embedding_dim
 
         bert_output_dim = 768
+
+        self.bert_lstm = nn.LSTM(
+            bert_output_dim,
+            hparams.hidden_dim,
+            bidirectional=hparams.bidirectional,
+            num_layers=hparams.num_layers,
+            dropout=hparams.dropout if hparams.num_layers > 1 else 0,
+            batch_first=True,
+        )
+
+        lstm_output_dim = (
+            hparams.hidden_dim
+            if hparams.bidirectional is False
+            else hparams.hidden_dim * 2
+        )
+        lstm_input_size += lstm_output_dim
+
         self.dropout = nn.Dropout(hparams.dropout)
-
-        lstm_input_size = bert_output_dim + hparams.embedding_dim
-
-        if hparams.use_pos:
-            lstm_input_size += hparams.pos_embedding_dim
 
         self.lstm = nn.LSTM(
             lstm_input_size,
@@ -75,6 +90,7 @@ class ABSABert(nn.Module):
             bidirectional=hparams.bidirectional,
             num_layers=hparams.num_layers,
             dropout=hparams.dropout if hparams.num_layers > 1 else 0,
+            batch_first=True,
         )
         lstm_output_dim = (
             hparams.hidden_dim
@@ -93,10 +109,14 @@ class ABSABert(nn.Module):
         attention_mask=None,
         bert_embeddings=None,
     ):
-        bert_embeddings = self.dropout(bert_embeddings)
         embeddings = self.word_embedding(x)
         embeddings = self.dropout(embeddings)
-        all_embeddings = torch.cat((bert_embeddings, embeddings), dim=-1)
+
+        bert_embeddings = self.dropout(bert_embeddings)
+        lstm_bert_out, _ = lstm_padded(self.bert_lstm, bert_embeddings, x_lengths)
+
+        all_embeddings = torch.cat((embeddings, lstm_bert_out), dim=-1)
+
         if self.hparams.use_pos:
             pos_embeddings = self.pos_embedding(pos_tags)
             pos_embeddings = self.dropout(pos_embeddings)
