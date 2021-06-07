@@ -18,6 +18,7 @@ from transformers import BertTokenizer, BertModel, BertConfig
 
 # set up tokenizers
 nltk.download("punkt")
+nltk.download("averaged_perceptron_tagger")
 
 
 def read_data(path: str) -> List[Dict[str, Any]]:
