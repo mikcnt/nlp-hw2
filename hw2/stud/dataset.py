@@ -86,7 +86,7 @@ def preprocess(
         "bert_embeddings": [],
     }
     for d in raw_data:
-        text = d["text"].lower()
+        text = d["text"]
         tokens = tokenizer.tokenize(text)
         pos_tags = [pos[1] for pos in nltk.pos_tag(tokens)]
         if bert_embedder is not None:
@@ -209,11 +209,11 @@ class ABSADataset(Dataset):
         self.use_bert = use_bert
         if use_bert:
             bert_config = BertConfig.from_pretrained(
-                "bert-base-uncased", output_hidden_states=True
+                "bert-base-cased", output_hidden_states=True
             )
-            bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+            bert_tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
             bert_model = BertModel.from_pretrained(
-                "bert-base-uncased", config=bert_config
+                "bert-base-cased", config=bert_config
             )
             bert_embedder = BERTEmbedder(
                 bert_model=bert_model,
