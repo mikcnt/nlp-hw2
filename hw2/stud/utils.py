@@ -36,7 +36,6 @@ def pad_collate(batch):
         bert_embeddings_pad = pad_sequence(
             bert_embeddings, batch_first=True, padding_value=0
         )
-        print("this has been done")
     except:
         bert_embeddings_pad = None
 
