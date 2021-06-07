@@ -61,7 +61,7 @@ class ABSABert(nn.Module):
                 hparams.pos_vocab_size, hparams.pos_embedding_dim
             )
 
-        bert_output_dim = self.bert.config.hidden_size
+        bert_output_dim = 768
         self.dropout = nn.Dropout(hparams.dropout)
 
         lstm_input_size = bert_output_dim + hparams.embedding_dim
