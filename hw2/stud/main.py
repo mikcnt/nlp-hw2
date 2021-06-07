@@ -56,7 +56,7 @@ if __name__ == "__main__":
     )
     # --------- VOCABULARIES ---------
     vocabulary = build_vocab(
-        train_data["sentences"], specials=["<pad>", "<unk>"], min_freq=1
+        train_data["sentences"], specials=["<pad>", "<unk>"], min_freq=2
     )
     sentiments_vocabulary = build_vocab(train_data["targets"], specials=["<pad>"])
     pos_vocabulary = build_vocab(train_data["pos_tags"], specials=["<pad>", "<unk>"])
