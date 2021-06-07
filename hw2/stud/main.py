@@ -85,7 +85,7 @@ if __name__ == "__main__":
         "bidirectional": True,
         "num_layers": 2,
         "dropout": 0.5,
-        "lr": 2e-5 if USE_BERT else 1e-3,
+        "lr": 2e-4 if USE_BERT else 1e-3,
         "weight_decay": 0.0,
         "batch_size": 16,
         "use_bert": USE_BERT,
