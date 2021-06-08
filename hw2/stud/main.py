@@ -91,7 +91,7 @@ if __name__ == "__main__":
         "use_bert": USE_BERT,
         "tagging_schema": TAGGING_SCHEMA,
         "use_crf": False,
-        "use_pos": False,
+        "use_pos": True,
         "pos_embedding_dim": 300,
         "pos_vocab_size": len(pos_vocabulary),
     }

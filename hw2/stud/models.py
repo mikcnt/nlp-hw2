@@ -123,16 +123,16 @@ class ABSABert(nn.Module):
         bert_embeddings=None,
     ):
         embeddings = self.word_embedding(x)
-        # embeddings = self.dropout(embeddings)
+        embeddings = self.dropout(embeddings)
 
-        # bert_embeddings = self.dropout(bert_embeddings)
+        bert_embeddings = self.dropout(bert_embeddings)
         lstm_bert_out, _ = lstm_padded(self.bert_lstm, bert_embeddings, x_lengths)
 
         all_embeddings = torch.cat((embeddings, lstm_bert_out), dim=-1)
 
         if self.hparams.use_pos:
             pos_embeddings = self.pos_embedding(pos_tags)
-            # pos_embeddings = self.dropout(pos_embeddings)
+            pos_embeddings = self.dropout(pos_embeddings)
             lstm_pos_out, _ = lstm_padded(self.pos_lstm, pos_embeddings, x_lengths)
             all_embeddings = torch.cat((all_embeddings, lstm_pos_out), dim=-1)
 
