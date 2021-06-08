@@ -62,7 +62,20 @@ class ABSABert(nn.Module):
             self.pos_embedding = nn.Embedding(
                 hparams.pos_vocab_size, hparams.pos_embedding_dim
             )
-            lstm_input_size += hparams.pos_embedding_dim
+            self.pos_lstm = nn.LSTM(
+                hparams.pos_embedding_dim,
+                hparams.hidden_dim,
+                bidirectional=hparams.bidirectional,
+                num_layers=hparams.num_layers,
+                dropout=hparams.dropout if hparams.num_layers > 1 else 0,
+                batch_first=True,
+            )
+            lstm_output_dim = (
+                hparams.hidden_dim
+                if hparams.bidirectional is False
+                else hparams.hidden_dim * 2
+            )
+            lstm_input_size += lstm_output_dim
 
         bert_output_dim = 768
 
@@ -120,7 +133,9 @@ class ABSABert(nn.Module):
         if self.hparams.use_pos:
             pos_embeddings = self.pos_embedding(pos_tags)
             pos_embeddings = self.dropout(pos_embeddings)
-            all_embeddings = torch.cat((all_embeddings, pos_embeddings), dim=-1)
+            lstm_pos_out, _ = lstm_padded(self.pos_lstm, pos_embeddings, x_lengths)
+            all_embeddings = torch.cat((all_embeddings, lstm_pos_out), dim=-1)
+
         output, _ = lstm_padded(self.lstm, all_embeddings, x_lengths)
         output = self.dropout(output)
         output = self.classifier(output)

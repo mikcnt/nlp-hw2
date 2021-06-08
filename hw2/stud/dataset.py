@@ -4,9 +4,7 @@ import torch
 import pytorch_lightning as pl
 from collections import Counter
 
-import nltk
 from nltk import TreebankWordTokenizer
-from nltk.tokenize.treebank import TreebankWordDetokenizer
 from tqdm import tqdm
 from typing import List, Dict, Any, Union, Optional
 from torch.utils.data import Dataset, DataLoader
@@ -16,7 +14,7 @@ from stud.bert_embedder import BERTEmbedder
 from stud.utils import pad_collate
 from transformers import BertTokenizer, BertModel, BertConfig
 
-# set up tokenizers
+# download nltk stuff
 nltk.download("punkt")
 nltk.download("averaged_perceptron_tagger")
 
