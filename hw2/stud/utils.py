@@ -18,30 +18,45 @@ def load_pickle(path: str) -> Any:
 
 
 def pad_collate(batch):
-    # pad x
-    xx = [x["inputs"] for x in batch]
-    xx_pad = pad_sequence(xx, batch_first=True, padding_value=0)
-    attention_mask = xx_pad != 0
+    # pad token indexes
+    token_indexes = [x["token_indexes"] for x in batch]
+    token_indexes_padded = pad_sequence(
+        token_indexes, batch_first=True, padding_value=0
+    )
 
-    # pad y
+    # lenghts and attention mask
+    lengths = [len(x) for x in token_indexes]
+    attention_mask = token_indexes_padded != 0
+
+    # pad labels (except in case we're doing inference)
     try:
-        yy = [x["outputs"] for x in batch]
-        yy_pad = pad_sequence(yy, batch_first=True, padding_value=0)
+        labels = [x["labels"] for x in batch]
+        labels_padded = pad_sequence(labels, batch_first=True, padding_value=0)
     except:
-        yy_pad = None
+        labels_padded = None
 
-    # lengths
-    lengths = [len(x) for x in xx]
+    # pad pos tags
+    pos_tags = [x["pos_tags"] for x in batch]
+    pos_tags_padded = pad_sequence(pos_tags, batch_first=True, padding_value=0)
 
-    batch = {
-        "inputs": xx_pad,
-        "outputs": yy_pad,
+    # pad bert embeddings (except in case we don't use bert)
+    try:
+        bert_embeddings = [x["bert_embeddings"] for x in batch]
+        bert_embeddings_padded = pad_sequence(
+            bert_embeddings, batch_first=True, padding_value=0
+        )
+    except:
+        bert_embeddings_padded = None
+
+    return {
+        "token_indexes": token_indexes_padded,
+        "labels": labels_padded,
+        "pos_tags": pos_tags_padded,
+        "bert_embeddings": bert_embeddings_padded,
         "lengths": lengths,
         "attention_mask": attention_mask,
         "raw": [x["raw"] for x in batch],
     }
-
-    return batch
 
 
 def compute_pretrained_embeddings(path: str, cache: str, vocabulary: Vocab):
