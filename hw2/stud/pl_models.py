@@ -112,7 +112,7 @@ class PlABSAModel(pl.LightningModule):
         self, batch: Dict[str, torch.Tensor], batch_idx: Optional[int]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         step_output = self.step(batch, compute_f1=True)
-        val_loss = step_output["val_loss"]
+        val_loss = step_output["loss"]
         f1_extraction = step_output["f1_extraction"]
         f1_evaluation = step_output["f1_evaluation"]
         # Log loss and f1 score
