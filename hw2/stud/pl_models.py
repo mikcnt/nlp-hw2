@@ -69,7 +69,7 @@ class PlABSAModel(pl.LightningModule):
 
     def step(self, batch: Dict[str, torch.Tensor], compute_f1=False) -> Dict[str, Any]:
         output = self(batch)
-        labels = batch["outputs"]
+        labels = batch["labels"]
         logits = output["logits"]
         text_predictions = output["text_predictions"]
         text_gt = batch["raw"]
