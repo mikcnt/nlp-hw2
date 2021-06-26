@@ -80,7 +80,7 @@ class ABSAModel(nn.Module):
         self.crf = CRF(num_tags=hparams.num_classes, batch_first=True)
 
     def forward(self, batch: Dict[str, Union[torch.Tensor, List[int]]]):
-        token_indexes = batch["inputs"]
+        token_indexes = batch["token_indexes"]
         lengths = batch["lengths"]
         pos_tags = batch["pos_tags"]
 
