@@ -3,7 +3,6 @@ from nltk import TreebankWordTokenizer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
-from transformers import BertTokenizer
 
 from stud.dataset import (
     read_data,
@@ -37,23 +36,15 @@ if __name__ == "__main__":
     # --------- CONSTANTS ---------
     USE_BERT = True
     TAGGING_SCHEMA = "IOB"
-    assert TAGGING_SCHEMA in [
-        "IOB",
-        "BIOES",
-    ], "Tagging schema should be either IOB or BIOES."
 
     # --------- TOKENIZER ---------
     tokenizer = TreebankWordTokenizer()
-    # (
-    #     BertTokenizer.from_pretrained("bert-base-cased")
-    #     if USE_BERT
-    #     else TreebankWordTokenizer()
-    # )
 
     # --------- TAG DATA: IOB OR BIOES ---------
     train_data = preprocess(
         train_raw_data, tokenizer=tokenizer, tagging_schema=TAGGING_SCHEMA
     )
+
     # --------- VOCABULARIES ---------
     vocabulary = build_vocab(
         train_data["sentences"], specials=["<pad>", "<unk>"], min_freq=2
@@ -85,13 +76,14 @@ if __name__ == "__main__":
         "bidirectional": True,
         "num_layers": 2,
         "dropout": 0.5,
+        "optimizer": "transformers.AdamW",
         "lr": 2e-4 if USE_BERT else 1e-3,
         "weight_decay": 0.0,
         "batch_size": 16,
         "use_bert": USE_BERT,
         "tagging_schema": TAGGING_SCHEMA,
         "use_crf": False,
-        "use_pos": True,
+        "use_pos": False,
         "pos_embedding_dim": 300,
         "pos_vocab_size": len(pos_vocabulary),
     }
@@ -135,7 +127,7 @@ if __name__ == "__main__":
         gpus=1,
         val_check_interval=1.0,
         max_epochs=1000,
-        callbacks=[checkpoint_callback],
+        callbacks=[early_stop_callback, checkpoint_callback],
         num_sanity_val_steps=0,
         logger=wandb_logger,
         overfit_batches=overfit_batches,

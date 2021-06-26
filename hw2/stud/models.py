@@ -3,7 +3,6 @@ from torch import nn
 from typing import *
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from torchcrf import CRF
-from transformers import BertModel
 
 
 def lstm_padded(
@@ -17,40 +16,6 @@ def lstm_padded(
 class ABSAModel(nn.Module):
     def __init__(self, hparams, embeddings=None):
         super(ABSAModel, self).__init__()
-        self.word_embedding = nn.Embedding(hparams.vocab_size, hparams.embedding_dim)
-        if embeddings is not None:
-            self.word_embedding.weight.data.copy_(embeddings)
-
-        self.lstm = nn.LSTM(
-            hparams.embedding_dim,
-            hparams.hidden_dim,
-            bidirectional=hparams.bidirectional,
-            num_layers=hparams.num_layers,
-            dropout=hparams.dropout if hparams.num_layers > 1 else 0,
-        )
-        lstm_output_dim = (
-            hparams.hidden_dim
-            if hparams.bidirectional is False
-            else hparams.hidden_dim * 2
-        )
-
-        self.crf = CRF(num_tags=hparams.num_classes, batch_first=True)
-
-        self.dropout = nn.Dropout(hparams.dropout)
-        self.classifier = nn.Linear(lstm_output_dim, hparams.num_classes)
-
-    def forward(self, x, x_lengths, attention_mask=None):
-        embeddings = self.word_embedding(x)
-        embeddings = self.dropout(embeddings)
-        o, o_lengths = lstm_padded(self.lstm, embeddings, x_lengths)
-        o = self.dropout(o)
-        output = self.classifier(o)
-        return output
-
-
-class ABSABert(nn.Module):
-    def __init__(self, hparams, embeddings=None):
-        super(ABSABert, self).__init__()
         self.hparams = hparams
         self.word_embedding = nn.Embedding(hparams.vocab_size, hparams.embedding_dim)
         if embeddings is not None:
@@ -114,29 +79,25 @@ class ABSABert(nn.Module):
 
         self.crf = CRF(num_tags=hparams.num_classes, batch_first=True)
 
-    def forward(
-        self,
-        x,
-        x_lengths,
-        pos_tags,
-        attention_mask=None,
-        bert_embeddings=None,
-    ):
-        embeddings = self.word_embedding(x)
-        embeddings = self.dropout(embeddings)
+    def forward(self, batch: Dict[str, Union[torch.Tensor, List[int]]]):
+        token_indexes = batch["inputs"]
+        lengths = batch["lengths"]
+        pos_tags = batch["pos_tags"]
 
-        bert_embeddings = self.dropout(bert_embeddings)
-        lstm_bert_out, _ = lstm_padded(self.bert_lstm, bert_embeddings, x_lengths)
+        token_embeddings = self.dropout(self.word_embedding(token_indexes))
+        output = token_embeddings
 
-        all_embeddings = torch.cat((embeddings, lstm_bert_out), dim=-1)
+        if self.hparams.use_bert:
+            bert_embeddings = self.dropout(batch["bert_embeddings"])
+            lstm_bert_out, _ = lstm_padded(self.bert_lstm, bert_embeddings, lengths)
+            output = torch.cat((output, lstm_bert_out), dim=-1)
 
         if self.hparams.use_pos:
-            pos_embeddings = self.pos_embedding(pos_tags)
-            pos_embeddings = self.dropout(pos_embeddings)
-            lstm_pos_out, _ = lstm_padded(self.pos_lstm, pos_embeddings, x_lengths)
-            all_embeddings = torch.cat((all_embeddings, lstm_pos_out), dim=-1)
+            pos_embeddings = self.dropout(self.pos_embedding(pos_tags))
+            lstm_pos_out, _ = lstm_padded(self.pos_lstm, pos_embeddings, lengths)
+            output = torch.cat((output, lstm_pos_out), dim=-1)
 
-        output, _ = lstm_padded(self.lstm, all_embeddings, x_lengths)
+        output, _ = lstm_padded(self.lstm, output, lengths)
         output = self.dropout(output)
         output = self.classifier(output)
         return output

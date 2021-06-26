@@ -11,7 +11,6 @@ class BERTEmbedder:
         Args:
           bert_model (BertModel): The pretrained BERT model.
           bert_tokenizer (BertTokenizer): The pretrained BERT tokenizer.
-          token_limit (integer): The maximum number of tokens to give as input to BERT.
           device (string): The device on which BERT should run, either cuda or cpu.
         """
         super(BERTEmbedder, self).__init__()
@@ -49,9 +48,9 @@ class BERTEmbedder:
 
         # we sum the sum of the last four hidden layers (-1 is the hidden states, see point (3) above)
         layers_to_sum = torch.stack(
-            [bert_output[-1][x] for x in [-1, -2, -3, -4]], axis=0
+            [bert_output[-1][x] for x in [-1, -2, -3, -4]], dim=0
         )
-        summed_layers = torch.sum(layers_to_sum, axis=0)
+        summed_layers = torch.sum(layers_to_sum, dim=0)
         merged_output = self._merge_embeddings(summed_layers, to_merge_wordpieces)
 
         return merged_output
@@ -124,7 +123,7 @@ class BERTEmbedder:
             for word_to_merge_wordpiece in sentence_to_merge_wordpieces:
                 # we average all the embeddings of the subpieces of a word
                 sentence_output.append(
-                    torch.mean(embeddings[word_to_merge_wordpiece], axis=0)
+                    torch.mean(embeddings[word_to_merge_wordpiece], dim=0)
                 )
             merged_output.append(torch.stack(sentence_output).to(self.device))
         return merged_output

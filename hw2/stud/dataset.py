@@ -6,7 +6,7 @@ from collections import Counter
 
 from nltk import TreebankWordTokenizer
 from tqdm import tqdm
-from typing import List, Dict, Any, Union, Optional
+from typing import List, Dict, Any, Optional
 from torch.utils.data import Dataset, DataLoader
 from torchtext.vocab import Vocab
 
@@ -29,7 +29,7 @@ def read_data(path: str) -> List[Dict[str, Any]]:
 def tokens_position(
     sentence: str,
     target_char_positions: List[int],
-    tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
+    tokenizer: TreebankWordTokenizer,
 ) -> List[int]:
     """Extract tokens with sentiments associated positions from position in string."""
     s_pos, e_pos = target_char_positions
@@ -39,9 +39,7 @@ def tokens_position(
     return list(range(s_token, s_token + n_tokens))
 
 
-def json_to_tags(
-    example, tokenizer: Union[TreebankWordTokenizer, BertTokenizer], tagging_schema: str
-):
+def json_to_tags(example, tokenizer: TreebankWordTokenizer, tagging_schema: str):
     assert tagging_schema in ["IOB", "BIOES"], "Schema must be either `IOB` or `BIOES`."
 
     text = example["text"]
@@ -71,12 +69,11 @@ def json_to_tags(
 
 def preprocess(
     raw_data: List[Dict[str, Any]],
-    tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
+    tokenizer: TreebankWordTokenizer,
     tagging_schema: Optional[str] = None,
     bert_embedder=None,
     train: bool = True,
-):
-    """Convert data in JSON format to IOB schema."""
+) -> Dict[str, Any]:
     processed_data = {
         "sentences": [],
         "targets": [],
@@ -197,7 +194,7 @@ class ABSADataset(Dataset):
         raw_data: List[Dict[str, Any]],
         vocabularies: Dict[str, Vocab],
         tagging_schema: str,
-        tokenizer: Union[TreebankWordTokenizer, BertTokenizer],
+        tokenizer: TreebankWordTokenizer,
         use_bert: bool = True,
         train: bool = True,
     ) -> None:
@@ -205,6 +202,8 @@ class ABSADataset(Dataset):
         self.raw_data = raw_data
         self.tokenizer = tokenizer
         self.use_bert = use_bert
+        self.train = train
+
         if use_bert:
             bert_config = BertConfig.from_pretrained(
                 "bert-base-cased", output_hidden_states=True
@@ -220,7 +219,7 @@ class ABSADataset(Dataset):
             )
         else:
             bert_embedder = None
-        self.train = train
+
         preprocessed_data = preprocess(
             raw_data,
             tokenizer=tokenizer,
@@ -228,10 +227,12 @@ class ABSADataset(Dataset):
             bert_embedder=bert_embedder,
             train=train,
         )
+
         self.sentences = preprocessed_data["sentences"]
         self.targets = preprocessed_data["targets"]
         self.pos_tags = preprocessed_data["pos_tags"]
         self.bert_embeddings = preprocessed_data["bert_embeddings"]
+
         self.vocabulary = vocabularies["vocabulary"]
         self.sentiments_vocabulary = vocabularies["sentiments_vocabulary"]
         self.pos_vocabulary = vocabularies["pos_vocabulary"]
@@ -240,15 +241,12 @@ class ABSADataset(Dataset):
         self.index_dataset()
 
     def encode_text(self, sentence: List[str], vocab) -> List[int]:
-        if isinstance(self.tokenizer, BertTokenizer):
-            indices = self.tokenizer.convert_tokens_to_ids(sentence)
-        else:
-            indices = []
-            for w in sentence:
-                if w in vocab.stoi:
-                    indices.append(vocab[w])
-                else:
-                    indices.append(vocab.unk_index)
+        indices = []
+        for w in sentence:
+            if w in vocab.stoi:
+                indices.append(vocab[w])
+            else:
+                indices.append(vocab.unk_index)
         return indices
 
     def index_dataset(self):
@@ -257,7 +255,7 @@ class ABSADataset(Dataset):
             sentence = self.sentences[i]
             pos_tags = self.pos_tags[i]
             data_dict["raw"] = self.raw_data[i]
-            data_dict["inputs"] = torch.LongTensor(
+            data_dict["token_indexes"] = torch.LongTensor(
                 self.encode_text(sentence, self.vocabulary)
             )
             data_dict["pos_tags"] = torch.LongTensor(
@@ -269,7 +267,7 @@ class ABSADataset(Dataset):
 
             if self.train:
                 targets = self.targets[i]
-                data_dict["outputs"] = torch.LongTensor(
+                data_dict["labels"] = torch.LongTensor(
                     [self.sentiments_vocabulary[t] for t in targets]
                 )
 
