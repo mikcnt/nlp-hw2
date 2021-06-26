@@ -69,23 +69,28 @@ if __name__ == "__main__":
 
     # --------- HYPERPARAMETERS ---------
     hparams = {
-        "vocab_size": len(vocabulary),
-        "hidden_dim": 300,
-        "embedding_dim": pretrained_embeddings.shape[1],
-        "num_classes": len(sentiments_vocabulary),
-        "bidirectional": True,
-        "num_layers": 2,
-        "dropout": 0.5,
-        "optimizer": "transformers.AdamW",
-        "lr": 2e-4 if USE_BERT else 1e-3,
-        "weight_decay": 0.0,
+        # general parameters
         "batch_size": 16,
-        "use_bert": USE_BERT,
+        "num_classes": len(sentiments_vocabulary),
         "tagging_schema": TAGGING_SCHEMA,
+        "use_bert": USE_BERT,
         "use_crf": False,
         "use_pos": False,
-        "pos_embedding_dim": 300,
+        # optimizer parameters
+        "optimizer": "transformers.AdamW",
+        "lr": 2e-4,
+        "weight_decay": 0.0,
+        # vocabularies
+        "vocab_size": len(vocabulary),
         "pos_vocab_size": len(pos_vocabulary),
+        # network parameters
+        "num_layers": 2,
+        "hidden_dim": 300,
+        "bidirectional": True,
+        "dropout": 0.5,
+        "pos_embedding_dim": 300,
+        # Glove embeddings
+        "embedding_dim": pretrained_embeddings.shape[1],
     }
 
     # --------- TRAINER ---------

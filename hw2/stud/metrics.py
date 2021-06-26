@@ -39,7 +39,7 @@ class F1SentimentExtraction(Metric):
             if precision + recall != 0.0
             else torch.tensor(0.0, device=self.device)
         )
-        return f1
+        return torch.tensor(f1, device=self.device)
 
     def reset(self) -> None:
         self.add_state("tp", default=torch.tensor(0.0), dist_reduce_fx="sum")
