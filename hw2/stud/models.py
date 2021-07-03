@@ -4,6 +4,8 @@ from typing import *
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from torchcrf import CRF
 
+from stud.bert_embedder_2 import BertEmbedder2
+
 
 def lstm_padded(
     lstm_layer: nn.Module, x: torch.Tensor, lengths: List[int]
@@ -43,6 +45,8 @@ class ABSAModel(nn.Module):
             lstm_input_size += lstm_output_dim
 
         bert_output_dim = 768
+
+        self.bert_embedder = BertEmbedder2()
 
         self.bert_lstm = nn.LSTM(
             bert_output_dim,
@@ -88,7 +92,10 @@ class ABSAModel(nn.Module):
         output = token_embeddings
 
         if self.hparams.use_bert:
-            bert_embeddings = self.dropout(batch["bert_embeddings"])
+            # bert_embeddings = self.dropout(batch["bert_embeddings"])
+            with torch.no_grad():
+                bert_embeddings = self.bert_embedder(batch)
+            bert_embeddings = self.dropout(bert_embeddings)
             lstm_bert_out, _ = lstm_padded(self.bert_lstm, bert_embeddings, lengths)
             output = torch.cat((output, lstm_bert_out), dim=-1)
 

@@ -26,10 +26,10 @@ if __name__ == "__main__":
     # read raw data
     restaurants_train_raw_data = read_data(restaurants_train_path)
     restaurants_dev_raw_data = read_data(restaurants_dev_path)
-    laptops_train_raw_data = read_data(laptops_train_path)
-    laptops_dev_raw_data = read_data(laptops_dev_path)
-    train_raw_data = restaurants_train_raw_data + laptops_train_raw_data
-    dev_raw_data = restaurants_dev_raw_data + laptops_dev_raw_data
+    # laptops_train_raw_data = read_data(laptops_train_path)
+    # laptops_dev_raw_data = read_data(laptops_dev_path)
+    train_raw_data = restaurants_train_raw_data# + laptops_train_raw_data
+    dev_raw_data = restaurants_dev_raw_data# + laptops_dev_raw_data
 
     # --------- CONSTANTS ---------
     USE_BERT = True

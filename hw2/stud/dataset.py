@@ -204,21 +204,21 @@ class ABSADataset(Dataset):
         self.use_bert = use_bert
         self.train = train
 
-        if use_bert:
-            bert_config = BertConfig.from_pretrained(
-                "bert-base-cased", output_hidden_states=True
-            )
-            bert_tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
-            bert_model = BertModel.from_pretrained(
-                "bert-base-cased", config=bert_config
-            )
-            bert_embedder = BERTEmbedder(
-                bert_model=bert_model,
-                bert_tokenizer=bert_tokenizer,
-                device="cuda",
-            )
-        else:
-            bert_embedder = None
+        # if use_bert:
+        #     bert_config = BertConfig.from_pretrained(
+        #         "bert-base-cased", output_hidden_states=True
+        #     )
+        #     bert_tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
+        #     bert_model = BertModel.from_pretrained(
+        #         "bert-base-cased", config=bert_config
+        #     )
+        #     bert_embedder = BERTEmbedder(
+        #         bert_model=bert_model,
+        #         bert_tokenizer=bert_tokenizer,
+        #         device="cuda",
+        #     )
+        # else:
+        bert_embedder = None
 
         preprocessed_data = preprocess(
             raw_data,
@@ -231,7 +231,7 @@ class ABSADataset(Dataset):
         self.sentences = preprocessed_data["sentences"]
         self.targets = preprocessed_data["targets"]
         self.pos_tags = preprocessed_data["pos_tags"]
-        self.bert_embeddings = preprocessed_data["bert_embeddings"]
+        # self.bert_embeddings = preprocessed_data["bert_embeddings"]
 
         self.vocabulary = vocabularies["vocabulary"]
         self.sentiments_vocabulary = vocabularies["sentiments_vocabulary"]
@@ -254,6 +254,7 @@ class ABSADataset(Dataset):
             data_dict = {}
             sentence = self.sentences[i]
             pos_tags = self.pos_tags[i]
+            data_dict["tokens"] = sentence
             data_dict["raw"] = self.raw_data[i]
             data_dict["token_indexes"] = torch.LongTensor(
                 self.encode_text(sentence, self.vocabulary)
@@ -262,8 +263,8 @@ class ABSADataset(Dataset):
                 self.encode_text(pos_tags, self.pos_vocabulary)
             )
 
-            if self.use_bert:
-                data_dict["bert_embeddings"] = self.bert_embeddings[i]
+            # if self.use_bert:
+            #     data_dict["bert_embeddings"] = self.bert_embeddings[i]
 
             if self.train:
                 targets = self.targets[i]
