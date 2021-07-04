@@ -92,7 +92,6 @@ class ABSAModel(nn.Module):
         output = token_embeddings
 
         if self.hparams.use_bert:
-            # bert_embeddings = self.dropout(batch["bert_embeddings"])
             with torch.no_grad():
                 bert_embeddings = self.bert_embedder(batch)
             bert_embeddings = self.dropout(bert_embeddings)

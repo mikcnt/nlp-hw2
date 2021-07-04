@@ -1,6 +1,7 @@
 from typing import List
 
 import torch
+import pytorch_lightning as pl
 from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 from transformers import AutoModel, AutoTokenizer
@@ -9,14 +10,14 @@ import numpy as np
 from itertools import groupby
 
 
-class BertEmbedder2(nn.Module):
+class BertEmbedder2(pl.LightningModule):
     def __init__(self):
         super().__init__()
         transformer_type = "bert-base-cased"
         self.tokenizer = AutoTokenizer.from_pretrained(transformer_type)
         self.model = AutoModel.from_pretrained(
             transformer_type, output_hidden_states=True, return_dict=True
-        )
+        ).to(self.device)
         self.model.eval()
 
         self.average_last_k_layers = 3
@@ -80,9 +81,12 @@ class BertEmbedder2(nn.Module):
             )
         )
 
-        zeros = torch.zeros(encoding.input_ids.size(0), 1)
+        zeros = torch.zeros(encoding.input_ids.size(0), 1, device=attention_mask.device)
+
         # add exclusion of CLS and SEP
         encoding_mask = torch.cat([zeros, attention_mask, zeros], dim=1).bool()
+
+        encoding = {k: v.to(self.device) for k, v in encoding.items()}
 
         transformer_out = self.model(**encoding)
 
@@ -93,12 +97,13 @@ class BertEmbedder2(nn.Module):
 
         bpe_weights = torch.sparse.FloatTensor(
             bpe_indices, bpe_values, bpe_weights_size
-        )
+        ).to(self.device)
 
         bert_embeddings = torch.bmm(bpe_weights, bert_embeddings)
 
         # padding and special tokens (CLS & SEP) removal
         bert_embeddings = bert_embeddings[encoding_mask]
+
         # bert_embeddings is now 1-D, we need to split it again
         bert_embeddings: List[torch.Tensor] = torch.split(bert_embeddings, lengths)
 
@@ -108,79 +113,3 @@ class BertEmbedder2(nn.Module):
         )
 
         return bert_embeddings_padded
-
-
-if __name__ == "__main__":
-    bert_embedder = BertEmbeddert()
-    sentences = [
-        "This is the first sentence",
-        "This is the second sentence , a little longer",
-        "This is the third sentence . As you can see, the longest . A veeeeeeeeeeeeery long one",
-    ]
-    sentences = [sentence.split() for sentence in sentences]
-    labels = [torch.randint(2, (len(sentence),)) for sentence in sentences]
-
-    lengths = [5, 9, 17]
-    attention_mask = torch.tensor(
-        [
-            [
-                True,
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-            ],
-            [
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-            ],
-            [
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-            ],
-        ]
-    )
-    batch = dict(tokens=sentences, lengths=lengths, attention_mask=attention_mask)
-    print(bert_embedder(batch).shape)
