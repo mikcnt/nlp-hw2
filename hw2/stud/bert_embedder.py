@@ -1,24 +1,20 @@
 import torch
 from typing import List
+
+from torch.nn.utils.rnn import pad_sequence
 from transformers import BertModel, BertTokenizer
+import pytorch_lightning as pl
 
 
-class BERTEmbedder:
-    def __init__(
-        self, bert_model: BertModel, bert_tokenizer: BertTokenizer, device: str
-    ):
-        """
-        Args:
-          bert_model (BertModel): The pretrained BERT model.
-          bert_tokenizer (BertTokenizer): The pretrained BERT tokenizer.
-          device (string): The device on which BERT should run, either cuda or cpu.
-        """
-        super(BERTEmbedder, self).__init__()
-        self.bert_model = bert_model
-        self.bert_model.to(device)
+class BERTEmbedder(pl.LightningModule):
+    def __init__(self):
+        super().__init__()
+        transformer_type = "bert-base-cased"
+        self.bert_tokenizer = BertModel.from_pretrained(transformer_type)
+        self.bert_model = BertTokenizer.from_pretrained(
+            transformer_type, output_hidden_states=True, return_dict=True
+        ).to(self.device)
         self.bert_model.eval()
-        self.bert_tokenizer = bert_tokenizer
-        self.device = device
 
     def embed_sentences(self, sentences: List[str]):
         # we convert the sentences to an input that can be fed to BERT
@@ -126,4 +122,9 @@ class BERTEmbedder:
                     torch.mean(embeddings[word_to_merge_wordpiece], dim=0)
                 )
             merged_output.append(torch.stack(sentence_output).to(self.device))
-        return merged_output
+
+        bert_embeddings_padded = pad_sequence(
+            merged_output, batch_first=True, padding_value=0
+        )
+
+        return bert_embeddings_padded
