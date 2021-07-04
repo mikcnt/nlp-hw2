@@ -10,8 +10,8 @@ class BERTEmbedder(pl.LightningModule):
     def __init__(self):
         super().__init__()
         transformer_type = "bert-base-cased"
-        self.bert_tokenizer = BertModel.from_pretrained(transformer_type)
-        self.bert_model = BertTokenizer.from_pretrained(
+        self.bert_tokenizer = BertTokenizer.from_pretrained(transformer_type)
+        self.bert_model = BertModel.from_pretrained(
             transformer_type, output_hidden_states=True, return_dict=True
         ).to(self.device)
         self.bert_model.eval()
