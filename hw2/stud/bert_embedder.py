@@ -128,3 +128,7 @@ class BERTEmbedder(pl.LightningModule):
         )
 
         return bert_embeddings_padded
+
+    def forward(self, batch):
+        tokens = batch["tokens"]
+        return self.embed_sentences(tokens)
