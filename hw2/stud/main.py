@@ -1,3 +1,4 @@
+import os
 import pytorch_lightning as pl
 from nltk import TreebankWordTokenizer
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -15,6 +16,7 @@ from stud.pl_models import PlABSAModel
 from stud.utils import save_pickle, compute_pretrained_embeddings
 
 if __name__ == "__main__":
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
     # --------- REPRODUCIBILITY AND PATHS ---------
     # set seeds for reproducibility
     pl.seed_everything(42)
@@ -26,10 +28,10 @@ if __name__ == "__main__":
     # read raw data
     restaurants_train_raw_data = read_data(restaurants_train_path)
     restaurants_dev_raw_data = read_data(restaurants_dev_path)
-    # laptops_train_raw_data = read_data(laptops_train_path)
-    # laptops_dev_raw_data = read_data(laptops_dev_path)
-    train_raw_data = restaurants_train_raw_data  # + laptops_train_raw_data
-    dev_raw_data = restaurants_dev_raw_data  # + laptops_dev_raw_data
+    laptops_train_raw_data = read_data(laptops_train_path)
+    laptops_dev_raw_data = read_data(laptops_dev_path)
+    train_raw_data = restaurants_train_raw_data + laptops_train_raw_data
+    dev_raw_data = restaurants_dev_raw_data + laptops_dev_raw_data
 
     # --------- CONSTANTS ---------
     USE_BERT = True

@@ -26,21 +26,20 @@ class BERTEmbedder(pl.LightningModule):
         ) = self._prepare_input(sentences)
         # we set output_all_encoded_layers to True cause we want to sum the
         # representations of the last four hidden layers
-        with torch.no_grad():
-            # The BertModel forward method returns a tuple of 3 elements:
-            # 1) last_hidden_states of shape (batch_size x sequence_length x hidden_size),
-            # which is the sequence of hidden states of the last layer of the model,
-            # 2) pooler_output of shape batch_size x hidden_size,
-            # which is the hidden states of the first token of the sequence (the CLS token)
-            # passed through a Linear layer with a Tanh activation function,
-            # 3) hidden_states, which is a tuple of FloatTensors, each of shape
-            # (batch_size x sequence_length x hidden_size), each FloatTensor is the hidden states
-            # of the model at the output of one of BERT's layers.
-            bert_output = self.bert_model.forward(
-                input_ids=input_ids,
-                token_type_ids=token_type_ids,
-                attention_mask=attention_mask,
-            )
+        # The BertModel forward method returns a tuple of 3 elements:
+        # 1) last_hidden_states of shape (batch_size x sequence_length x hidden_size),
+        # which is the sequence of hidden states of the last layer of the model,
+        # 2) pooler_output of shape batch_size x hidden_size,
+        # which is the hidden states of the first token of the sequence (the CLS token)
+        # passed through a Linear layer with a Tanh activation function,
+        # 3) hidden_states, which is a tuple of FloatTensors, each of shape
+        # (batch_size x sequence_length x hidden_size), each FloatTensor is the hidden states
+        # of the model at the output of one of BERT's layers.
+        bert_output = self.bert_model.forward(
+            input_ids=input_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask,
+        )
 
         # we sum the sum of the last four hidden layers (-1 is the hidden states, see point (3) above)
         layers_to_sum = torch.stack(
