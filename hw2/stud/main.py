@@ -62,7 +62,7 @@ if __name__ == "__main__":
 
     # --------- PRETRAINED EMBEDDINGS ---------
     pretrained_embeddings = compute_pretrained_embeddings(
-        path="../../model/glove.6B.300d.txt",
+        path="../../model/wiki-news-300d-1M.vec",
         cache="../../model/.vector_cache/",
         vocabulary=vocabulary,
     )
@@ -78,7 +78,7 @@ if __name__ == "__main__":
         "use_pos": False,
         # optimizer parameters
         "optimizer": "transformers.AdamW",
-        "lr": 2e-4,
+        "lr": 2e-5,
         "weight_decay": 0.0,
         # vocabularies
         "vocab_size": len(vocabulary),
