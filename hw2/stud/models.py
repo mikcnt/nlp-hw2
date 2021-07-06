@@ -4,7 +4,7 @@ from typing import *
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from torchcrf import CRF
 
-from stud.bert_embedder_2 import BertEmbedder2
+from stud.bert_embedder import BertEmbedder
 
 
 def lstm_padded(
@@ -57,7 +57,7 @@ class ABSAModel(nn.Module):
 
         if hparams.use_bert:
             bert_output_dim = 768
-            self.bert_embedder = BertEmbedder2()
+            self.bert_embedder = BertEmbedder()
             self.bert_linear = nn.Linear(bert_output_dim, bert_output_dim)
             self.san_bert = SAN(d_model=bert_output_dim, nhead=24, dropout=0.1)
 
