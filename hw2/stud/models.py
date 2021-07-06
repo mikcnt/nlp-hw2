@@ -4,6 +4,8 @@ from typing import *
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from torchcrf import CRF
 
+from stud.bert_embedder import BertEmbedder
+
 
 def lstm_padded(
     lstm_layer: nn.Module, x: torch.Tensor, lengths: List[int]
@@ -13,54 +15,53 @@ def lstm_padded(
     return pad_packed_sequence(o_packed, batch_first=True)
 
 
+class SAN(nn.Module):
+    def __init__(self, d_model, nhead, dropout=0.1):
+        super(SAN, self).__init__()
+        self.d_model = d_model
+        self.nhead = nhead
+        self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+        self.dropout = nn.Dropout(p=dropout)
+        self.norm = nn.LayerNorm(d_model)
+
+    def forward(self, src, src_mask=None, src_key_padding_mask=None):
+        """
+        :param src:
+        :param src_mask:
+        :param src_key_padding_mask:
+        :return:
+        """
+        src2, _ = self.self_attn(
+            src, src, src, attn_mask=src_mask, key_padding_mask=src_key_padding_mask
+        )
+        src = self.dropout(src2)
+        # apply layer normalization
+        src = self.norm(src)
+        return src
+
+
 class ABSAModel(nn.Module):
     def __init__(self, hparams, embeddings=None):
         super(ABSAModel, self).__init__()
         self.hparams = hparams
+
+        lstm_input_size = 0
+
         self.word_embedding = nn.Embedding(hparams.vocab_size, hparams.embedding_dim)
         if embeddings is not None:
             self.word_embedding.weight.data.copy_(embeddings)
+        self.glove_linear = nn.Linear(hparams.embedding_dim, hparams.embedding_dim)
+        self.san_glove = SAN(d_model=hparams.embedding_dim, nhead=12, dropout=0.1)
 
-        lstm_input_size = hparams.embedding_dim
+        lstm_input_size += hparams.embedding_dim
 
-        if hparams.use_pos:
-            self.pos_embedding = nn.Embedding(
-                hparams.pos_vocab_size, hparams.pos_embedding_dim
-            )
-            self.pos_lstm = nn.LSTM(
-                hparams.pos_embedding_dim,
-                hparams.hidden_dim,
-                bidirectional=hparams.bidirectional,
-                num_layers=hparams.num_layers,
-                dropout=hparams.dropout if hparams.num_layers > 1 else 0,
-                batch_first=True,
-            )
-            lstm_output_dim = (
-                hparams.hidden_dim
-                if hparams.bidirectional is False
-                else hparams.hidden_dim * 2
-            )
-            lstm_input_size += lstm_output_dim
+        if hparams.use_bert:
+            bert_output_dim = 768
+            self.bert_embedder = BertEmbedder()
+            self.bert_linear = nn.Linear(bert_output_dim, bert_output_dim)
+            self.san_bert = SAN(d_model=bert_output_dim, nhead=24, dropout=0.1)
 
-        bert_output_dim = 768
-
-        self.bert_lstm = nn.LSTM(
-            bert_output_dim,
-            hparams.hidden_dim,
-            bidirectional=hparams.bidirectional,
-            num_layers=hparams.num_layers,
-            dropout=hparams.dropout if hparams.num_layers > 1 else 0,
-            batch_first=True,
-        )
-
-        lstm_output_dim = (
-            hparams.hidden_dim
-            if hparams.bidirectional is False
-            else hparams.hidden_dim * 2
-        )
-        lstm_input_size += lstm_output_dim
-
-        self.dropout = nn.Dropout(hparams.dropout)
+            lstm_input_size += bert_output_dim
 
         self.lstm = nn.LSTM(
             lstm_input_size,
@@ -75,7 +76,10 @@ class ABSAModel(nn.Module):
             if hparams.bidirectional is False
             else hparams.hidden_dim * 2
         )
+
         self.classifier = nn.Linear(lstm_output_dim, hparams.num_classes)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(hparams.dropout)
 
         self.crf = CRF(num_tags=hparams.num_classes, batch_first=True)
 
@@ -84,20 +88,28 @@ class ABSAModel(nn.Module):
         lengths = batch["lengths"]
         pos_tags = batch["pos_tags"]
 
-        token_embeddings = self.dropout(self.word_embedding(token_indexes))
-        output = token_embeddings
+        token_embeddings = self.word_embedding(token_indexes)
+        token_embeddings = self.dropout(token_embeddings)
+        lstm_glove_out = self.relu(self.glove_linear(token_embeddings))
+        lstm_glove_out = self.san_glove(
+            lstm_glove_out.transpose(0, 1),
+            src_key_padding_mask=~batch["attention_mask"],
+        ).transpose(0, 1)
+        lstm_glove_out = self.dropout(lstm_glove_out)
+
+        output = lstm_glove_out
 
         if self.hparams.use_bert:
-            bert_embeddings = self.dropout(batch["bert_embeddings"])
-            lstm_bert_out, _ = lstm_padded(self.bert_lstm, bert_embeddings, lengths)
+            bert_embeddings = self.bert_embedder(batch)
+            bert_embeddings = self.dropout(bert_embeddings)
+            lstm_bert_out = self.relu(self.bert_linear(bert_embeddings))
+            lstm_bert_out = self.san_bert(
+                lstm_bert_out.transpose(0, 1),
+                src_key_padding_mask=~batch["attention_mask"],
+            ).transpose(0, 1)
+            lstm_bert_out = self.dropout(lstm_bert_out)
             output = torch.cat((output, lstm_bert_out), dim=-1)
 
-        if self.hparams.use_pos:
-            pos_embeddings = self.dropout(self.pos_embedding(pos_tags))
-            lstm_pos_out, _ = lstm_padded(self.pos_lstm, pos_embeddings, lengths)
-            output = torch.cat((output, lstm_pos_out), dim=-1)
-
         output, _ = lstm_padded(self.lstm, output, lengths)
-        output = self.dropout(output)
         output = self.classifier(output)
         return output

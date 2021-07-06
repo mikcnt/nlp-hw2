@@ -55,6 +55,7 @@ def pad_collate(batch):
         "bert_embeddings": bert_embeddings_padded,
         "lengths": lengths,
         "attention_mask": attention_mask,
+        "tokens": [x["tokens"] for x in batch],
         "raw": [x["raw"] for x in batch],
     }
 

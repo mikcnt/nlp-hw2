@@ -1,3 +1,4 @@
+import os
 import pytorch_lightning as pl
 from nltk import TreebankWordTokenizer
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -15,6 +16,7 @@ from stud.pl_models import PlABSAModel
 from stud.utils import save_pickle, compute_pretrained_embeddings
 
 if __name__ == "__main__":
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
     # --------- REPRODUCIBILITY AND PATHS ---------
     # set seeds for reproducibility
     pl.seed_everything(42)
@@ -76,7 +78,7 @@ if __name__ == "__main__":
         "use_pos": False,
         # optimizer parameters
         "optimizer": "transformers.AdamW",
-        "lr": 2e-4,
+        "lr": 2e-5,
         "weight_decay": 0.0,
         # vocabularies
         "vocab_size": len(vocabulary),
