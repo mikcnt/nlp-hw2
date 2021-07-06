@@ -69,7 +69,6 @@ def preprocess(
     raw_data: List[Dict[str, Any]],
     tokenizer: TreebankWordTokenizer,
     tagging_schema: Optional[str] = None,
-    bert_embedder=None,
     train: bool = True,
 ) -> Dict[str, Any]:
     processed_data = {
@@ -189,22 +188,17 @@ class ABSADataset(Dataset):
         vocabularies: Dict[str, Vocab],
         tagging_schema: str,
         tokenizer: TreebankWordTokenizer,
-        use_bert: bool = True,
         train: bool = True,
     ) -> None:
         super(ABSADataset, self).__init__()
         self.raw_data = raw_data
         self.tokenizer = tokenizer
-        self.use_bert = use_bert
         self.train = train
-
-        bert_embedder = None
 
         preprocessed_data = preprocess(
             raw_data,
             tokenizer=tokenizer,
             tagging_schema=tagging_schema,
-            bert_embedder=bert_embedder,
             train=train,
         )
 

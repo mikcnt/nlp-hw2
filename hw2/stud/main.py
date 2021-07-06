@@ -62,7 +62,7 @@ if __name__ == "__main__":
 
     # --------- PRETRAINED EMBEDDINGS ---------
     pretrained_embeddings = compute_pretrained_embeddings(
-        path="../../model/wiki-news-300d-1M.vec",
+        path="../../model/glove.6B.300d.txt",
         cache="../../model/.vector_cache/",
         vocabulary=vocabulary,
     )
