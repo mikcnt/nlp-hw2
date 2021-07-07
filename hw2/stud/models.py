@@ -56,6 +56,19 @@ class ABSAModel(nn.Module):
                 self.san_bert = SAN(d_model=bert_output_dim, nhead=24, dropout=0.1)
             lstm_input_size += bert_output_dim
 
+        if self.hparams.use_pos:
+            self.pos_embedding = nn.Embedding(
+                hparams.pos_vocab_size, hparams.pos_embedding_dim
+            )
+            self.pos_linear = nn.Linear(
+                hparams.pos_embedding_dim, hparams.pos_embedding_dim
+            )
+            if self.hparams.use_attention:
+                self.san_pos = SAN(
+                    d_model=hparams.pos_embedding_dim, nhead=12, dropout=0.1
+                )
+            lstm_input_size += hparams.pos_embedding_dim
+
         self.lstm = nn.LSTM(
             lstm_input_size,
             hparams.hidden_dim,
@@ -109,6 +122,18 @@ class ABSAModel(nn.Module):
                 ).transpose(0, 1)
             lstm_bert_out = self.dropout(lstm_bert_out)
             output = torch.cat((output, lstm_bert_out), dim=-1)
+
+        if self.hparams.use_pos:
+            pos_embeddings = self.pos_embedding(pos_tags)
+            pos_embeddings = self.dropout(pos_embeddings)
+            lstm_pos_out = self.relu(self.pos_linear(pos_embeddings))
+            if self.hparams.use_attention:
+                lstm_pos_out = self.san_pos(
+                    lstm_pos_out.transpose(0, 1),
+                    key_padding_mask=~batch["attention_mask"],
+                ).transpose(0, 1)
+            lstm_pos_out = self.dropout(lstm_pos_out)
+            output = torch.cat((output, lstm_pos_out), dim=-1)
 
         output, _ = lstm_padded(self.lstm, output, lengths)
         output = self.classifier(output)
