@@ -9,7 +9,7 @@ from torchtext.vocab import Vocab
 
 from stud.bert_embedder import BertEmbedder
 from stud.metrics import F1SentimentEvaluation
-from stud.models import SAN, lstm_padded
+from stud.models import Attention, lstm_padded
 
 
 class ABSACategoryModel(nn.Module):
@@ -23,13 +23,15 @@ class ABSACategoryModel(nn.Module):
 
         lstm_input_size = 0
         self.glove_linear = nn.Linear(hparams.embedding_dim, hparams.embedding_dim)
-        self.san_glove = SAN(d_model=hparams.embedding_dim, nhead=12, dropout=0.1)
+        self.attention_glove = Attention(
+            d_model=hparams.embedding_dim, nhead=12, dropout=0.1
+        )
         lstm_input_size += hparams.embedding_dim
 
         bert_output_dim = 768
         self.bert_embedder = BertEmbedder()
         self.bert_linear = nn.Linear(bert_output_dim, bert_output_dim)
-        self.san_bert = SAN(d_model=bert_output_dim, nhead=24, dropout=0.1)
+        self.attention_bert = Attention(d_model=bert_output_dim, nhead=24, dropout=0.1)
         lstm_input_size += bert_output_dim
 
         self.lstm = nn.LSTM(
@@ -64,30 +66,29 @@ class ABSACategoryModel(nn.Module):
     def forward(self, batch: Dict[str, Union[torch.Tensor, List[int]]]):
         token_indexes = batch["token_indexes"]
         lengths = batch["lengths"]
-        pos_tags = batch["pos_tags"]
 
-        token_embeddings = self.word_embedding(token_indexes)
-        token_embeddings = self.dropout(token_embeddings)
-        lstm_glove_out = self.relu(self.glove_linear(token_embeddings))
+        glove_embeddings = self.word_embedding(token_indexes)
+        glove_embeddings = self.dropout(glove_embeddings)
+        glove_embeddings = self.relu(self.glove_linear(glove_embeddings))
 
-        lstm_glove_out = self.san_glove(
-            lstm_glove_out.transpose(0, 1),
+        glove_embeddings = self.attention_glove(
+            glove_embeddings.transpose(0, 1),
             key_padding_mask=~batch["attention_mask"],
         ).transpose(0, 1)
-        lstm_glove_out = self.dropout(lstm_glove_out)
+        glove_embeddings = self.dropout(glove_embeddings)
 
-        output = lstm_glove_out
+        output = glove_embeddings
 
         if self.hparams.use_bert:
             bert_embeddings = self.bert_embedder(batch)
             bert_embeddings = self.dropout(bert_embeddings)
-            lstm_bert_out = self.relu(self.bert_linear(bert_embeddings))
-            lstm_bert_out = self.san_bert(
-                lstm_bert_out.transpose(0, 1),
+            bert_embeddings = self.relu(self.bert_linear(bert_embeddings))
+            bert_embeddings = self.attention_bert(
+                bert_embeddings.transpose(0, 1),
                 key_padding_mask=~batch["attention_mask"],
             ).transpose(0, 1)
-            lstm_bert_out = self.dropout(lstm_bert_out)
-            output = torch.cat((output, lstm_bert_out), dim=-1)
+            bert_embeddings = self.dropout(bert_embeddings)
+            output = torch.cat((output, bert_embeddings), dim=-1)
 
         output = self.lstm_last(output, lengths)
 

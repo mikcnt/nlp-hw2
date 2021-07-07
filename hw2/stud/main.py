@@ -36,6 +36,7 @@ if __name__ == "__main__":
     # --------- CONSTANTS ---------
     USE_BERT = True
     TAGGING_SCHEMA = "IOB"
+    MIN_FREQ = 2
 
     # --------- TOKENIZER ---------
     tokenizer = TreebankWordTokenizer()
@@ -47,7 +48,7 @@ if __name__ == "__main__":
 
     # --------- VOCABULARIES ---------
     vocabulary = build_vocab(
-        train_data["sentences"], specials=["<pad>", "<unk>"], min_freq=2
+        train_data["sentences"], specials=["<pad>", "<unk>"], min_freq=MIN_FREQ
     )
     sentiments_vocabulary = build_vocab(train_data["targets"], specials=["<pad>"])
     pos_vocabulary = build_vocab(train_data["pos_tags"], specials=["<pad>", "<unk>"])
@@ -59,6 +60,7 @@ if __name__ == "__main__":
     # save vocabularies to file
     save_pickle(vocabulary, "../../model/vocabulary.pkl")
     save_pickle(sentiments_vocabulary, "../../model/sentiments_vocabulary.pkl")
+    save_pickle(pos_vocabulary, "../../model/pos_vocabulary.pkl")
 
     # --------- PRETRAINED EMBEDDINGS ---------
     pretrained_embeddings = compute_pretrained_embeddings(
@@ -127,8 +129,8 @@ if __name__ == "__main__":
 
     # logger
     overfit_batches = 0
-    run_name = "best_model"
-    wandb_logger = WandbLogger(offline=False, project="nlp-hw2-A+B", name=run_name)
+    run_name = "M3 (IOB)"
+    wandb_logger = WandbLogger(offline=True, project="nlp-hw2-A+B", name=run_name)
 
     # define trainer and train
     trainer = pl.Trainer(

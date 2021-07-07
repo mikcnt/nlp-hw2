@@ -15,7 +15,7 @@ def lstm_padded(
     return pad_packed_sequence(o_packed, batch_first=True)
 
 
-class SAN(nn.Module):
+class Attention(nn.Module):
     def __init__(self, d_model, nhead, dropout=0.1):
         super().__init__()
         self.d_model = d_model
@@ -45,7 +45,7 @@ class ABSAModel(nn.Module):
         lstm_input_size = 0
         self.glove_linear = nn.Linear(hparams.embedding_dim, hparams.embedding_dim)
         if self.hparams.use_attention:
-            self.san_glove = SAN(d_model=hparams.embedding_dim, nhead=12, dropout=0.1)
+            self.attention_glove = Attention(d_model=hparams.embedding_dim, nhead=12, dropout=0.1)
         lstm_input_size += hparams.embedding_dim
 
         if self.hparams.use_bert:
@@ -53,7 +53,7 @@ class ABSAModel(nn.Module):
             self.bert_embedder = BertEmbedder()
             self.bert_linear = nn.Linear(bert_output_dim, bert_output_dim)
             if self.hparams.use_attention:
-                self.san_bert = SAN(d_model=bert_output_dim, nhead=24, dropout=0.1)
+                self.attention_bert = Attention(d_model=bert_output_dim, nhead=24, dropout=0.1)
             lstm_input_size += bert_output_dim
 
         if self.hparams.use_pos:
@@ -64,7 +64,7 @@ class ABSAModel(nn.Module):
                 hparams.pos_embedding_dim, hparams.pos_embedding_dim
             )
             if self.hparams.use_attention:
-                self.san_pos = SAN(
+                self.attention_pos = Attention(
                     d_model=hparams.pos_embedding_dim, nhead=12, dropout=0.1
                 )
             lstm_input_size += hparams.pos_embedding_dim
@@ -94,18 +94,18 @@ class ABSAModel(nn.Module):
         lengths = batch["lengths"]
         pos_tags = batch["pos_tags"]
 
-        token_embeddings = self.word_embedding(token_indexes)
-        token_embeddings = self.dropout(token_embeddings)
-        lstm_glove_out = self.relu(self.glove_linear(token_embeddings))
+        glove_embeddings = self.word_embedding(token_indexes)
+        glove_embeddings = self.dropout(glove_embeddings)
+        glove_embeddings = self.relu(self.glove_linear(glove_embeddings))
 
         if self.hparams.use_attention:
-            lstm_glove_out = self.san_glove(
-                lstm_glove_out.transpose(0, 1),
+            glove_embeddings = self.attention_glove(
+                glove_embeddings.transpose(0, 1),
                 key_padding_mask=~batch["attention_mask"],
             ).transpose(0, 1)
-        lstm_glove_out = self.dropout(lstm_glove_out)
+        glove_embeddings = self.dropout(glove_embeddings)
 
-        output = lstm_glove_out
+        output = glove_embeddings
 
         if self.hparams.use_bert:
             if not self.hparams.finetune_bert:
@@ -114,26 +114,26 @@ class ABSAModel(nn.Module):
             else:
                 bert_embeddings = self.bert_embedder(batch)
             bert_embeddings = self.dropout(bert_embeddings)
-            lstm_bert_out = self.relu(self.bert_linear(bert_embeddings))
+            bert_embeddings = self.relu(self.bert_linear(bert_embeddings))
             if self.hparams.use_attention:
-                lstm_bert_out = self.san_bert(
-                    lstm_bert_out.transpose(0, 1),
+                bert_embeddings = self.attention_bert(
+                    bert_embeddings.transpose(0, 1),
                     key_padding_mask=~batch["attention_mask"],
                 ).transpose(0, 1)
-            lstm_bert_out = self.dropout(lstm_bert_out)
-            output = torch.cat((output, lstm_bert_out), dim=-1)
+            bert_embeddings = self.dropout(bert_embeddings)
+            output = torch.cat((output, bert_embeddings), dim=-1)
 
         if self.hparams.use_pos:
             pos_embeddings = self.pos_embedding(pos_tags)
             pos_embeddings = self.dropout(pos_embeddings)
-            lstm_pos_out = self.relu(self.pos_linear(pos_embeddings))
+            pos_embeddings = self.relu(self.pos_linear(pos_embeddings))
             if self.hparams.use_attention:
-                lstm_pos_out = self.san_pos(
-                    lstm_pos_out.transpose(0, 1),
+                pos_embeddings = self.attention_pos(
+                    pos_embeddings.transpose(0, 1),
                     key_padding_mask=~batch["attention_mask"],
                 ).transpose(0, 1)
-            lstm_pos_out = self.dropout(lstm_pos_out)
-            output = torch.cat((output, lstm_pos_out), dim=-1)
+            pos_embeddings = self.dropout(pos_embeddings)
+            output = torch.cat((output, pos_embeddings), dim=-1)
 
         output, _ = lstm_padded(self.lstm, output, lengths)
         output = self.classifier(output)

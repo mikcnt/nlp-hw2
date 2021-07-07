@@ -6,8 +6,10 @@ from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 from transformers import AutoModel, AutoTokenizer
 import numpy as np
-
+import os
 from itertools import groupby
+
+os.environ["TRANSFORMERS_CACHE"] = "../../model/"
 
 
 class BertEmbedder(pl.LightningModule):
