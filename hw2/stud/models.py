@@ -85,10 +85,11 @@ class ABSAModel(nn.Module):
         token_embeddings = self.dropout(token_embeddings)
         lstm_glove_out = self.relu(self.glove_linear(token_embeddings))
 
-        lstm_glove_out = self.san_glove(
-            lstm_glove_out.transpose(0, 1),
-            key_padding_mask=~batch["attention_mask"],
-        ).transpose(0, 1)
+        if self.hparams.use_attention:
+            lstm_glove_out = self.san_glove(
+                lstm_glove_out.transpose(0, 1),
+                key_padding_mask=~batch["attention_mask"],
+            ).transpose(0, 1)
         lstm_glove_out = self.dropout(lstm_glove_out)
 
         output = lstm_glove_out
@@ -101,10 +102,11 @@ class ABSAModel(nn.Module):
                 bert_embeddings = self.bert_embedder(batch)
             bert_embeddings = self.dropout(bert_embeddings)
             lstm_bert_out = self.relu(self.bert_linear(bert_embeddings))
-            lstm_bert_out = self.san_bert(
-                lstm_bert_out.transpose(0, 1),
-                key_padding_mask=~batch["attention_mask"],
-            ).transpose(0, 1)
+            if self.hparams.use_attention:
+                lstm_bert_out = self.san_bert(
+                    lstm_bert_out.transpose(0, 1),
+                    key_padding_mask=~batch["attention_mask"],
+                ).transpose(0, 1)
             lstm_bert_out = self.dropout(lstm_bert_out)
             output = torch.cat((output, lstm_bert_out), dim=-1)
 
