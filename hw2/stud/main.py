@@ -126,7 +126,7 @@ if __name__ == "__main__":
     # logger
     overfit_batches = 0
     run_name = "best_model"
-    wandb_logger = WandbLogger(offline=False, project="nlp-hw2-A+B")
+    wandb_logger = WandbLogger(offline=False, project="nlp-hw2-A+B", name=run_name)
 
     # define trainer and train
     trainer = pl.Trainer(
