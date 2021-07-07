@@ -44,14 +44,17 @@ class ABSAModel(nn.Module):
 
         lstm_input_size = 0
         self.glove_linear = nn.Linear(hparams.embedding_dim, hparams.embedding_dim)
-        self.san_glove = SAN(d_model=hparams.embedding_dim, nhead=12, dropout=0.1)
+        if self.use_attention:
+            self.san_glove = SAN(d_model=hparams.embedding_dim, nhead=12, dropout=0.1)
         lstm_input_size += hparams.embedding_dim
 
-        bert_output_dim = 768
-        self.bert_embedder = BertEmbedder()
-        self.bert_linear = nn.Linear(bert_output_dim, bert_output_dim)
-        self.san_bert = SAN(d_model=bert_output_dim, nhead=24, dropout=0.1)
-        lstm_input_size += bert_output_dim
+        if self.hparams.use_bert:
+            bert_output_dim = 768
+            self.bert_embedder = BertEmbedder()
+            self.bert_linear = nn.Linear(bert_output_dim, bert_output_dim)
+            if self.use_attention:
+                self.san_bert = SAN(d_model=bert_output_dim, nhead=24, dropout=0.1)
+            lstm_input_size += bert_output_dim
 
         self.lstm = nn.LSTM(
             lstm_input_size,
@@ -91,7 +94,11 @@ class ABSAModel(nn.Module):
         output = lstm_glove_out
 
         if self.hparams.use_bert:
-            bert_embeddings = self.bert_embedder(batch)
+            if not self.hparams.finetune_bert:
+                with torch.no_grad():
+                    bert_embeddings = self.bert_embedder(batch)
+            else:
+                bert_embeddings = self.bert_embedder(batch)
             bert_embeddings = self.dropout(bert_embeddings)
             lstm_bert_out = self.relu(self.bert_linear(bert_embeddings))
             lstm_bert_out = self.san_bert(

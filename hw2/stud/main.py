@@ -74,6 +74,8 @@ if __name__ == "__main__":
         "num_classes": len(sentiments_vocabulary),
         "tagging_schema": TAGGING_SCHEMA,
         "use_bert": USE_BERT,
+        "finetune_bert": True,
+        "use_attention": True,
         "use_crf": False,
         "use_pos": False,
         # optimizer parameters
