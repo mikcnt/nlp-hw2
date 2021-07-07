@@ -10,7 +10,9 @@ from stud.dataset import (
     build_vocab,
     DataModuleABSA,
     preprocess,
+    build_vocab_category,
 )
+from stud.extra import PlABSACategoryModel
 
 from stud.pl_models import PlABSAModel
 from stud.utils import save_pickle, compute_pretrained_embeddings
@@ -23,15 +25,9 @@ if __name__ == "__main__":
     # paths
     restaurants_train_path = "../../data/restaurants_train.json"
     restaurants_dev_path = "../../data/restaurants_dev.json"
-    laptops_train_path = "../../data/laptops_train.json"
-    laptops_dev_path = "../../data/laptops_dev.json"
     # read raw data
-    restaurants_train_raw_data = read_data(restaurants_train_path)
-    restaurants_dev_raw_data = read_data(restaurants_dev_path)
-    laptops_train_raw_data = read_data(laptops_train_path)
-    laptops_dev_raw_data = read_data(laptops_dev_path)
-    train_raw_data = restaurants_train_raw_data + laptops_train_raw_data
-    dev_raw_data = restaurants_dev_raw_data + laptops_dev_raw_data
+    train_raw_data = read_data(restaurants_train_path)
+    dev_raw_data = read_data(restaurants_dev_path)
 
     # --------- CONSTANTS ---------
     USE_BERT = True
@@ -42,7 +38,10 @@ if __name__ == "__main__":
 
     # --------- TAG DATA: IOB OR BIOES ---------
     train_data = preprocess(
-        train_raw_data, tokenizer=tokenizer, tagging_schema=TAGGING_SCHEMA
+        train_raw_data,
+        tokenizer=tokenizer,
+        tagging_schema=TAGGING_SCHEMA,
+        save_categories=True,
     )
 
     # --------- VOCABULARIES ---------
@@ -51,10 +50,14 @@ if __name__ == "__main__":
     )
     sentiments_vocabulary = build_vocab(train_data["targets"], specials=["<pad>"])
     pos_vocabulary = build_vocab(train_data["pos_tags"], specials=["<pad>", "<unk>"])
+    cat_vocab, cat_pol_vocab = build_vocab_category(train_raw_data)
+
     vocabularies = {
         "vocabulary": vocabulary,
         "sentiments_vocabulary": sentiments_vocabulary,
         "pos_vocabulary": pos_vocabulary,
+        "category_vocabulary": cat_vocab,
+        "category_polarity_vocabulary": cat_pol_vocab,
     }
     # save vocabularies to file
     save_pickle(vocabulary, "../../model/vocabulary.pkl")
@@ -71,11 +74,10 @@ if __name__ == "__main__":
     hparams = {
         # general parameters
         "batch_size": 16,
-        "num_classes": len(sentiments_vocabulary),
+        "num_classes": len(cat_vocab) * (len(cat_pol_vocab) + 1),
+        # "num_classes": len(sentiments_vocabulary),
         "tagging_schema": TAGGING_SCHEMA,
         "use_bert": USE_BERT,
-        "finetune_bert": True,
-        "use_attention": True,
         "use_crf": False,
         "use_pos": False,
         # optimizer parameters
@@ -85,6 +87,8 @@ if __name__ == "__main__":
         # vocabularies
         "vocab_size": len(vocabulary),
         "pos_vocab_size": len(pos_vocabulary),
+        "category_vocab_size": len(cat_vocab),
+        "category_polarity_vocab_size": len(cat_pol_vocab),
         # network parameters
         "num_layers": 2,
         "hidden_dim": 300,
@@ -104,14 +108,15 @@ if __name__ == "__main__":
         batch_size=hparams["batch_size"],
         tagging_schema=TAGGING_SCHEMA,
         tokenizer=tokenizer,
+        save_categories=True,
     )
     # define model
-    model = PlABSAModel(
+    model = PlABSACategoryModel(
         hparams, vocabularies, embeddings=pretrained_embeddings, tokenizer=tokenizer
     )
     # callbacks
     early_stop_callback = EarlyStopping(
-        monitor="f1_evaluation_val",
+        monitor="f1_extraction_val",
         patience=1000,
         verbose=False,
         mode="max",
@@ -127,8 +132,8 @@ if __name__ == "__main__":
 
     # logger
     overfit_batches = 0
-    run_name = "best_model"
-    wandb_logger = WandbLogger(offline=False, project="nlp-hw2-A+B", name=run_name)
+    run_name = "best_model_"
+    wandb_logger = WandbLogger(offline=False, project="nlp-hw2-C+D", name=run_name)
 
     # define trainer and train
     trainer = pl.Trainer(

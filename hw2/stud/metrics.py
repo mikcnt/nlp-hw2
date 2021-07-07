@@ -58,6 +58,7 @@ class F1SentimentEvaluation(Metric):
                 "price",
                 "food",
                 "ambience",
+                "service",
             ]
         else:
             self.sentiment_types = ["positive", "negative", "neutral", "conflict"]

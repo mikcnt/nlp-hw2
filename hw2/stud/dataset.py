@@ -6,7 +6,7 @@ from collections import Counter
 
 from nltk import TreebankWordTokenizer
 from tqdm import tqdm
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from torch.utils.data import Dataset, DataLoader
 from torchtext.vocab import Vocab
 
@@ -22,6 +22,28 @@ def read_data(path: str) -> List[Dict[str, Any]]:
     with open(path) as f:
         raw_data = json.load(f)
     return raw_data
+
+
+def zero_dict() -> Dict[str, Dict[str, float]]:
+    return {
+        "anecdotes/miscellaneous": {
+            "positive": 0.0,
+            "negative": 0.0,
+            "neutral": 0.0,
+            "conflict": 0.0,
+        },
+        "price": {"positive": 0.0, "negative": 0.0, "neutral": 0.0, "conflict": 0.0},
+        "food": {"positive": 0.0, "negative": 0.0, "neutral": 0.0, "conflict": 0.0},
+        "ambience": {"positive": 0.0, "negative": 0.0, "neutral": 0.0, "conflict": 0.0},
+        "service": {"positive": 0.0, "negative": 0.0, "neutral": 0.0, "conflict": 0.0},
+    }
+
+
+def preprocess_category(d: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
+    category_dict = zero_dict()
+    for category, polarity in d["categories"]:
+        category_dict[category][polarity] = 1
+    return category_dict
 
 
 def tokens_position(
@@ -69,6 +91,7 @@ def preprocess(
     raw_data: List[Dict[str, Any]],
     tokenizer: TreebankWordTokenizer,
     tagging_schema: Optional[str] = None,
+    save_categories: bool = False,
     train: bool = True,
 ) -> Dict[str, Any]:
     processed_data = {
@@ -76,6 +99,8 @@ def preprocess(
         "targets": [],
         "pos_tags": [],
     }
+    if save_categories:
+        processed_data["categories"] = []
     for d in raw_data:
         text = d["text"]
         tokens = tokenizer.tokenize(text)
@@ -83,6 +108,11 @@ def preprocess(
 
         processed_data["sentences"].append(tokens)
         processed_data["pos_tags"].append(pos_tags)
+
+        # only valid for restaurants
+        if save_categories:
+            processed_data["categories"].append(preprocess_category(d))
+
         if train:
             sentiments = json_to_tags(d, tokenizer, tagging_schema)
             processed_data["targets"].append(sentiments)
@@ -172,6 +202,21 @@ def build_vocab(data: List[str], specials: List[str], min_freq: int = 1) -> Voca
     return Vocab(counter, specials=specials, min_freq=min_freq)
 
 
+def build_vocab_category(data: List[Dict[str, Any]]) -> Tuple[Vocab, Vocab]:
+    """Use with raw data, only on restaurants dataset."""
+    counter_category = Counter()
+    counter_polarity = Counter()
+    for d in data:
+        for category, polarity in d["categories"]:
+            counter_category[category] += 1
+            counter_polarity[polarity] += 1
+    from torchtext.vocab import Vocab
+
+    vocab_category = Vocab(counter_category, specials=())
+    vocab_polarity = Vocab(counter_polarity, specials=())
+    return vocab_category, vocab_polarity
+
+
 def dataset_max_len(sentences: List[List[str]]) -> int:
     max_len = 0
     for s in sentences:
@@ -188,23 +233,33 @@ class ABSADataset(Dataset):
         vocabularies: Dict[str, Vocab],
         tagging_schema: str,
         tokenizer: TreebankWordTokenizer,
+        save_categories: bool = False,
         train: bool = True,
     ) -> None:
         super(ABSADataset, self).__init__()
         self.raw_data = raw_data
         self.tokenizer = tokenizer
+        self.save_categories = save_categories
         self.train = train
 
         preprocessed_data = preprocess(
             raw_data,
             tokenizer=tokenizer,
             tagging_schema=tagging_schema,
+            save_categories=save_categories,
             train=train,
         )
 
         self.sentences = preprocessed_data["sentences"]
         self.targets = preprocessed_data["targets"]
         self.pos_tags = preprocessed_data["pos_tags"]
+
+        if save_categories:
+            self.categories = preprocessed_data["categories"]
+            self.category_vocabulary = vocabularies["category_vocabulary"]
+            self.category_polarity_vocabulary = vocabularies[
+                "category_polarity_vocabulary"
+            ]
 
         self.vocabulary = vocabularies["vocabulary"]
         self.sentiments_vocabulary = vocabularies["sentiments_vocabulary"]
@@ -236,6 +291,30 @@ class ABSADataset(Dataset):
                 self.encode_text(pos_tags, self.pos_vocabulary)
             )
 
+            if self.save_categories:
+                categories = self.categories[i]
+                # initialize 0-tensor
+                zeros = torch.zeros(
+                    len(self.category_vocabulary),
+                    len(self.category_polarity_vocabulary) + 1,
+                )
+
+                # place 1 in the polarity of a given category
+                for category, polarities in categories.items():
+                    for polarity, value in polarities.items():
+                        zeros[
+                            self.category_vocabulary[category],
+                            self.category_polarity_vocabulary[polarity],
+                        ] = value
+
+                # if a certain category has no polarity, place 1 in the last polarity
+                # (last place = no polarity)
+                for row in range(zeros.shape[0]):
+                    if sum(zeros[row]) == 0:
+                        zeros[row, -1] = 1
+
+                data_dict["categories"] = zeros
+
             if self.train:
                 targets = self.targets[i]
                 data_dict["labels"] = torch.LongTensor(
@@ -260,6 +339,7 @@ class DataModuleABSA(pl.LightningDataModule):
         tagging_schema: str,
         batch_size: int,
         tokenizer=None,
+        save_categories: bool = False,
     ):
 
         super(DataModuleABSA, self).__init__()
@@ -269,6 +349,7 @@ class DataModuleABSA(pl.LightningDataModule):
         self.vocabularies = vocabularies
         self.tagging_schema = tagging_schema
         self.tokenizer = tokenizer
+        self.save_categories = save_categories
 
     def setup(self, stage=None):
         self.trainset = ABSADataset(
@@ -276,12 +357,14 @@ class DataModuleABSA(pl.LightningDataModule):
             self.vocabularies,
             tagging_schema=self.tagging_schema,
             tokenizer=self.tokenizer,
+            save_categories=self.save_categories,
         )
         self.devset = ABSADataset(
             self.dev_data,
             self.vocabularies,
             tagging_schema=self.tagging_schema,
             tokenizer=self.tokenizer,
+            save_categories=self.save_categories,
         )
 
     def train_dataloader(self):
