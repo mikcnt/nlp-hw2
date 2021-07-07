@@ -35,8 +35,10 @@ class PlABSAModel(pl.LightningModule):
             ignore_index=self.sentiments_vocabulary["<pad>"]
         )
         if train:
-            self.f1_extraction = F1SentimentExtraction(device=self.device)
-            self.f1_evaluation = F1SentimentEvaluation(device=self.device)
+            self.f1_extraction_t = F1SentimentExtraction(device=self.device)
+            self.f1_evaluation_t = F1SentimentEvaluation(device=self.device)
+            self.f1_extraction_v = F1SentimentExtraction(device=self.device)
+            self.f1_evaluation_v = F1SentimentEvaluation(device=self.device)
 
         self.model = ABSAModel(self.hparams, embeddings)
 
@@ -67,7 +69,7 @@ class PlABSAModel(pl.LightningModule):
         text_predictions = self(batch)["text_predictions"]
         return text_predictions
 
-    def step(self, batch: Dict[str, torch.Tensor], compute_f1=False) -> Dict[str, Any]:
+    def step(self, batch: Dict[str, torch.Tensor], phase: str) -> Dict[str, Any]:
         output = self(batch)
         labels = batch["labels"]
         logits = output["logits"]
@@ -85,16 +87,25 @@ class PlABSAModel(pl.LightningModule):
             labels = labels.view(-1)
             step_output["loss"] = self.loss_function(logits, labels)
 
-        if compute_f1:
-            step_output["f1_extraction"] = self.f1_extraction(text_predictions, text_gt)
-            step_output["f1_evaluation"] = self.f1_evaluation(text_predictions, text_gt)
+        if phase == "train":
+            f1_extraction = self.f1_extraction_t
+            f1_evaluation = self.f1_evaluation_t
+        else:
+            f1_extraction = self.f1_extraction_v
+            f1_evaluation = self.f1_evaluation_v
+
+        step_output["f1_extraction"] = f1_extraction(text_predictions, text_gt)
+        step_output["f1_evaluation"] = f1_evaluation(text_predictions, text_gt)
 
         return step_output
 
     def training_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: Optional[int]
-    ) -> torch.Tensor:
-        train_loss = self.step(batch)["loss"]
+    ) -> Dict[str, torch.Tensor]:
+        step_output = self.step(batch, phase="train")
+        train_loss = step_output["loss"]
+        f1_extraction = step_output["f1_extraction"]
+        f1_evaluation = step_output["f1_evaluation"]
         # Log loss
         self.log_dict(
             {
@@ -104,14 +115,30 @@ class PlABSAModel(pl.LightningModule):
             on_step=False,
             on_epoch=True,
         )
-
         # Return loss to update weights
-        return train_loss
+        return {
+            "loss": train_loss,
+            "f1_extraction": f1_extraction,
+            "f1_evaluation": f1_evaluation,
+        }
+
+    def training_epoch_end(self, outputs):
+        f1_extraction = self.f1_extraction_t.compute()
+        f1_evaluation = self.f1_evaluation_t.compute()
+        self.log_dict(
+            {
+                "f1_extraction_train": f1_extraction,
+                "f1_evaluation_train": f1_evaluation,
+            },
+            prog_bar=False,
+        )
+        self.f1_extraction_t.reset()
+        self.f1_evaluation_t.reset()
 
     def validation_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: Optional[int]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        step_output = self.step(batch, compute_f1=True)
+    ) -> Dict[str, torch.Tensor]:
+        step_output = self.step(batch, phase="val")
         val_loss = step_output["loss"]
         f1_extraction = step_output["f1_extraction"]
         f1_evaluation = step_output["f1_evaluation"]
@@ -124,17 +151,17 @@ class PlABSAModel(pl.LightningModule):
             on_step=False,
             on_epoch=True,
         )
-        return f1_extraction, f1_evaluation
+        return {"f1_extraction": f1_extraction, "f1_evaluation": f1_evaluation}
 
     def validation_epoch_end(self, outputs):
-        f1_extraction = self.f1_extraction.compute()
-        f1_evaluation = self.f1_evaluation.compute()
+        f1_extraction = self.f1_extraction_v.compute()
+        f1_evaluation = self.f1_evaluation_v.compute()
         self.log_dict(
-            {"f1_extraction": f1_extraction, "f1_evaluation": f1_evaluation},
+            {"f1_extraction_val": f1_extraction, "f1_evaluation_val": f1_evaluation},
             prog_bar=True,
         )
-        self.f1_extraction.reset()
-        self.f1_evaluation.reset()
+        self.f1_extraction_v.reset()
+        self.f1_evaluation_v.reset()
 
     def configure_optimizers(self) -> optim.Optimizer:
         # dynamically instantiate optimizer

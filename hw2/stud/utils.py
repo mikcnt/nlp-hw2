@@ -39,20 +39,16 @@ def pad_collate(batch):
     pos_tags = [x["pos_tags"] for x in batch]
     pos_tags_padded = pad_sequence(pos_tags, batch_first=True, padding_value=0)
 
-    # pad bert embeddings (except in case we don't use bert)
     try:
-        bert_embeddings = [x["bert_embeddings"] for x in batch]
-        bert_embeddings_padded = pad_sequence(
-            bert_embeddings, batch_first=True, padding_value=0
-        )
+        categories = torch.stack([x["categories"] for x in batch])
     except:
-        bert_embeddings_padded = None
+        categories = None
 
     return {
         "token_indexes": token_indexes_padded,
         "labels": labels_padded,
+        "categories": categories,
         "pos_tags": pos_tags_padded,
-        "bert_embeddings": bert_embeddings_padded,
         "lengths": lengths,
         "attention_mask": attention_mask,
         "tokens": [x["tokens"] for x in batch],
