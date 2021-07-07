@@ -256,12 +256,14 @@ class ABSADataset(Dataset):
 
         if save_categories:
             self.categories = preprocessed_data["categories"]
+            self.category_vocabulary = vocabularies["category_vocabulary"]
+            self.category_polarity_vocabulary = vocabularies[
+                "category_polarity_vocabulary"
+            ]
 
         self.vocabulary = vocabularies["vocabulary"]
         self.sentiments_vocabulary = vocabularies["sentiments_vocabulary"]
         self.pos_vocabulary = vocabularies["pos_vocabulary"]
-        self.category_vocabulary = vocabularies["category_vocabulary"]
-        self.category_polarity_vocabulary = vocabularies["category_polarity_vocabulary"]
 
         self.encoded_data = []
         self.index_dataset()
