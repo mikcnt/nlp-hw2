@@ -14,26 +14,23 @@ from stud.models import SAN, lstm_padded
 
 class ABSACategoryModel(nn.Module):
     def __init__(self, hparams, embeddings=None):
-        super(ABSACategoryModel, self).__init__()
+        super().__init__()
         self.hparams = hparams
-
-        lstm_input_size = 0
 
         self.word_embedding = nn.Embedding(hparams.vocab_size, hparams.embedding_dim)
         if embeddings is not None:
             self.word_embedding.weight.data.copy_(embeddings)
+
+        lstm_input_size = 0
         self.glove_linear = nn.Linear(hparams.embedding_dim, hparams.embedding_dim)
         self.san_glove = SAN(d_model=hparams.embedding_dim, nhead=12, dropout=0.1)
-
         lstm_input_size += hparams.embedding_dim
 
-        if hparams.use_bert:
-            bert_output_dim = 768
-            self.bert_embedder = BertEmbedder()
-            self.bert_linear = nn.Linear(bert_output_dim, bert_output_dim)
-            self.san_bert = SAN(d_model=bert_output_dim, nhead=24, dropout=0.1)
-
-            lstm_input_size += bert_output_dim
+        bert_output_dim = 768
+        self.bert_embedder = BertEmbedder()
+        self.bert_linear = nn.Linear(bert_output_dim, bert_output_dim)
+        self.san_bert = SAN(d_model=bert_output_dim, nhead=24, dropout=0.1)
+        lstm_input_size += bert_output_dim
 
         self.lstm = nn.LSTM(
             lstm_input_size,
@@ -50,8 +47,8 @@ class ABSACategoryModel(nn.Module):
         )
 
         self.classifier = nn.Linear(lstm_output_dim, hparams.num_classes)
-        self.relu = nn.ReLU()
         self.dropout = nn.Dropout(hparams.dropout)
+        self.relu = nn.ReLU()
 
         self.logsoftmax = nn.LogSoftmax(dim=-1)
 
@@ -72,9 +69,10 @@ class ABSACategoryModel(nn.Module):
         token_embeddings = self.word_embedding(token_indexes)
         token_embeddings = self.dropout(token_embeddings)
         lstm_glove_out = self.relu(self.glove_linear(token_embeddings))
+
         lstm_glove_out = self.san_glove(
             lstm_glove_out.transpose(0, 1),
-            src_key_padding_mask=~batch["attention_mask"],
+            key_padding_mask=~batch["attention_mask"],
         ).transpose(0, 1)
         lstm_glove_out = self.dropout(lstm_glove_out)
 
@@ -86,7 +84,7 @@ class ABSACategoryModel(nn.Module):
             lstm_bert_out = self.relu(self.bert_linear(bert_embeddings))
             lstm_bert_out = self.san_bert(
                 lstm_bert_out.transpose(0, 1),
-                src_key_padding_mask=~batch["attention_mask"],
+                key_padding_mask=~batch["attention_mask"],
             ).transpose(0, 1)
             lstm_bert_out = self.dropout(lstm_bert_out)
             output = torch.cat((output, lstm_bert_out), dim=-1)
