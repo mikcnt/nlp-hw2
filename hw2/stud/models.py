@@ -44,7 +44,7 @@ class ABSAModel(nn.Module):
 
         lstm_input_size = 0
         self.glove_linear = nn.Linear(hparams.embedding_dim, hparams.embedding_dim)
-        if self.use_attention:
+        if self.hparams.use_attention:
             self.san_glove = SAN(d_model=hparams.embedding_dim, nhead=12, dropout=0.1)
         lstm_input_size += hparams.embedding_dim
 
@@ -52,7 +52,7 @@ class ABSAModel(nn.Module):
             bert_output_dim = 768
             self.bert_embedder = BertEmbedder()
             self.bert_linear = nn.Linear(bert_output_dim, bert_output_dim)
-            if self.use_attention:
+            if self.hparams.use_attention:
                 self.san_bert = SAN(d_model=bert_output_dim, nhead=24, dropout=0.1)
             lstm_input_size += bert_output_dim
 
