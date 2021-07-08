@@ -13,7 +13,6 @@ from stud.dataset import (
 
 from stud.pl_models import PlABSAModel
 from stud.utils import (
-    save_pickle,
     compute_pretrained_embeddings,
     load_pickle,
     pad_collate,
@@ -110,8 +109,6 @@ if __name__ == "__main__":
         collate_fn=pad_collate,
     )
 
-    print(sentiments_vocabulary.itos)
-
     all_labels = []
     all_predictions = []
     for i, batch in enumerate(tqdm(loader)):
@@ -122,23 +119,23 @@ if __name__ == "__main__":
             all_labels.append(labels)
             all_predictions.append(predictions)
 
-    # confusion matrix
     all_labels = torch.cat(all_labels).numpy()
     all_predictions = torch.cat(all_predictions).numpy()
 
+    # remove padded elements
     all_labels_no_pad = all_labels[all_labels != 0]
     all_predictions_no_pad = all_predictions[all_labels != 0]
 
+    # remove IOB tags (e.g., B-pos -> pos, I-pos -> pos, etc.)
     all_labels_no_pad_new = remove_iob(all_labels_no_pad)
     all_predictions_no_pad_new = remove_iob(all_predictions_no_pad)
 
+    # compute confusion matrix
     cm = confusion_matrix(all_labels_no_pad_new, all_predictions_no_pad_new)
     # normalize confusion matrix
-    # cm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
-    cm = cm / cm.astype(np.float).sum(axis=1)
+    cm = cm / cm.astype(float).sum(axis=1)
 
+    # save img
     fig, ax = plt.subplots(dpi=200)
-    ConfusionMatrixDisplay(cm, display_labels=ab_polarities).plot(
-        cmap="Blues", ax=ax
-    )
+    ConfusionMatrixDisplay(cm, display_labels=ab_polarities).plot(cmap="Blues", ax=ax)
     plt.savefig("confusion_matrix.png")
