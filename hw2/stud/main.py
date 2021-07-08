@@ -130,7 +130,7 @@ if __name__ == "__main__":
     # logger
     overfit_batches = 0
     run_name = "M3 (IOB)"
-    wandb_logger = WandbLogger(offline=True, project="nlp-hw2-A+B", name=run_name)
+    wandb_logger = WandbLogger(offline=False, project="nlp-hw2-A+B", name=run_name)
 
     # define trainer and train
     trainer = pl.Trainer(
