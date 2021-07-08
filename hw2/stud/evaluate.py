@@ -58,9 +58,7 @@ if __name__ == "__main__":
     laptops_dev_raw_data = read_data(laptops_dev_path)
     dev_raw_data = restaurants_dev_raw_data + laptops_dev_raw_data
 
-    model_path = (
-        "../../model/epoch=81_f1_extraction_val=0.8195_f1_evaluation_val=0.5439.ckpt"
-    )
+    model_path = "../../model/M0.ckpt"
     vocabulary_path = "../../model/vocabulary.pkl"
     sentiments_vocabulary_path = "../../model/sentiments_vocabulary.pkl"
     pos_vocabulary_path = "../../model/pos_vocabulary.pkl"
