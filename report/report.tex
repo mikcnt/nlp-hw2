@@ -85,52 +85,147 @@
 	\section{Figures and tables}
 	All figures and tables have been intentionally placed at the end of the document, in this section, so that they don't affect the maximum limit of three pages for the text.
 	
-	\begin{figure}[H]
+	\begin{figure}[h]
 		\centering
-		\includegraphics[width=1\columnwidth]{M3_diagram.pdf}
-		\caption{M3 model architecture.}
+		\includegraphics[width=0.7\columnwidth]{M0_diagram.pdf}
+		\caption{Baseline model (M0) architecture.}
+		\label{fig:M0_architecture}
+	\end{figure}
+	
+	
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=0.9\columnwidth]{M3_diagram.pdf}
+		\caption{Final model (M3) architecture.}
 		\label{fig:M3_architecture}
 	\end{figure}
 	
-	\begin{table}[H]
+	\begin{table}[h]
 		\centering
-		\begin{tabular}{@{}lcccc@{}}
+		\begin{tabular}{@{}lcc@{}}
 			\toprule
-			\textbf{Dataset} & positive & negative & neutral & conflict \\ \midrule
-			L. Train.        & 802      & 717      & 369     & 39       \\
-			L. Val.          & 185      & 149      & 91      & 6        \\
-			R. Train.        & 1803     & 647      & 508     & 72       \\
-			R. Val.          & 361      & 158      & 125     & 19       \\ \midrule
-			Train.           & 2605     & 1364     & 877     & 111      \\
-			Val.             & 546      & 307      & 216     & 25       \\ \bottomrule
+			\textbf{Sentiment} & Train & Dev \\ \midrule
+			positive           & 2605  & 546 \\
+			negative           & 1364  & 307 \\
+			neutral            & 877   & 216 \\
+			conflict           & 111   & 25  \\ \bottomrule
 		\end{tabular}
-		\caption{Datasets polarities frequencies (task A+B).}
-		\label{tab:targets}
+		\caption{Polarities support for targets (task A+B) in the training and development set (i.e., Restaurants + Laptops).}
+		\label{tab:my-table}
 	\end{table}
 	
-	\begin{table}[H]
+	\begin{table}[h]
 		\centering
-		\begin{tabular}{@{}lccccc@{}}
+		\begin{tabular}{@{}lcc@{}}
 			\toprule
-			\textbf{Dataset} & anecdotes/miscellaneous & price & food & ambience & service \\ \midrule
-			R. Train.        & 941                     & 268   & 1008 & 355      & 478     \\
-			R. Val.          & 191                     & 53    & 224  & 76       & 119     \\ \bottomrule
+			\textbf{Category}         & Train     & Dev \\ \midrule
+			anecdotes/miscellaneous   & 941       & 191     \\
+			price                     & 268       & 53      \\
+			food                      & 1008      & 224     \\
+			ambience                  & 355       & 76      \\
+			service                   & 478       & 119     \\ \bottomrule
 		\end{tabular}
-		\caption{Datasets categories frequencies (task C+D).}
-		\label{tab:targets}
+		\caption{Categories support (task C+D) in the training and development set (i.e., Restaurants).}
+		\label{tab:my-table}
 	\end{table}
 	
-	\begin{table}[H]
+	\begin{table}[h]
 		\centering
-		\begin{tabular}{@{}lcccc@{}}
+		\begin{tabular}{@{}lcc@{}}
 			\toprule
-			\textbf{Dataset} & positive & negative & neutral & conflict \\ \midrule
-			R. Train.        & 1803     & 672      & 411     & 164      \\
-			R. Val.          & 376      & 167      & 89      & 31       \\ \bottomrule
+			\textbf{Sentiment} & Train & Dev \\ \midrule
+			positive           & 1803  & 376 \\
+			negative           & 672   & 167 \\
+			neutral            & 411   & 89  \\
+			conflict           & 164   & 31  \\ \bottomrule
 		\end{tabular}
-		\caption{Datasets polarities frequencies (task C+D).}
-		\label{tab:targets}
+		\caption{Polarities support for categories (task C+D) in the training and development set (i.e., Restaurants).}
+		\label{tab:my-table}
 	\end{table}
+
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=1\columnwidth]{M0_ab_loss.png}
+		\caption{Task A+B: Baseline (M0) loss on the training and development set.}
+		\label{fig:M0_loss}
+	\end{figure}
+
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=1\columnwidth]{M3_ab_loss.png}
+		\caption{Task A+B: Final model (M3) loss on the training and development set.}
+		\label{fig:M3_loss}
+	\end{figure}
+
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=1\columnwidth]{M0_ab_f1_extr.png}
+		\caption{Task A+B: Baseline (M0) macro f1 extraction score on the training and development set.}
+		\label{fig:M0_extr}
+	\end{figure}
+	
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=1\columnwidth]{M3_ab_f1_extr.png}
+		\caption{Task A+B: Final model (M3) macro f1 extraction score on the training and development set.}
+		\label{fig:M3_extr}
+	\end{figure}
+
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=1\columnwidth]{M0_ab_f1_eval.png}
+		\caption{Task A+B: Baseline (M0) macro f1 evaluation score on the training and development set.}
+		\label{fig:M0_eval}
+	\end{figure}
+	
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=1\columnwidth]{M3_ab_f1_eval.png}
+		\caption{Task A+B: Final model (M3) macro f1 evaluation score on the training and development set.}
+		\label{fig:M3_eval}
+	\end{figure}
+	
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=1\columnwidth]{ab_comparative_f1_extr.png}
+		\caption{Task A+B: Comparative plot of f1 extraction score for the 6 model variations (M0, M1, M2, M3, M4, M5).}
+		\label{fig:comparative_f1_extr}
+	\end{figure}
+	
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=1\columnwidth]{ab_comparative_f1_eval.png}
+		\caption{Task A+B: Comparative plot of f1 evaluation score for the 6 model variations (M0, M1, M2, M3, M4, M5).}
+		\label{fig:comparative_f1_eval}
+	\end{figure}
+	
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=1\columnwidth]{M3_ab_IOB_vs_BIOES_f1_extr.png}
+		\caption{Task A+B: Comparative plot of f1 extraction score for the best model (M3) using two different tagging schemas (IOB, BIOES).}
+		\label{fig:IOB_vs_BIOES_extr}
+	\end{figure}
+	
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=1\columnwidth]{M3_ab_IOB_vs_BIOES_f1_eval.png}
+		\caption{Task A+B: Comparative plot of f1 evaluation score for the best model (M3) using two different tagging schemas (IOB, BIOES).}
+		\label{fig:IOB_vs_BIOES_eval}
+	\end{figure}
+
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=1\columnwidth]{M0_ab_confusion_matrix.png}
+		\caption{Task A+B: Normalized confusion matrix of the baseline model (M0).}
+		\label{fig:cm_M0}
+	\end{figure}
+
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=1\columnwidth]{M3_ab_confusion_matrix.png}
+		\caption{Task A+B: Normalized confusion matrix of the best model (M3).}
+		\label{fig:cm_M0}
+	\end{figure}
 	
 	\bibliographystyle{acl_natbib}
 	\bibliography{bibliography}
