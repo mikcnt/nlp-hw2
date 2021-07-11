@@ -18,6 +18,7 @@ from stud.utils import (
     pad_collate,
 )
 
+"""Evaluation script for the AB task of a given model. Used to produce confusion matrices."""
 
 ab_iob_polarities = [
     "<pad>",
