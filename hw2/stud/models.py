@@ -38,6 +38,7 @@ class ABSAModel(nn.Module):
         super().__init__()
         self.hparams = hparams
 
+        # GloVe embeddings
         self.word_embedding = nn.Embedding(hparams.vocab_size, hparams.embedding_dim)
         if embeddings is not None:
             self.word_embedding.weight.data.copy_(embeddings)
@@ -45,17 +46,23 @@ class ABSAModel(nn.Module):
         lstm_input_size = 0
         self.glove_linear = nn.Linear(hparams.embedding_dim, hparams.embedding_dim)
         if self.hparams.use_attention:
-            self.attention_glove = Attention(d_model=hparams.embedding_dim, nhead=12, dropout=0.1)
+            self.attention_glove = Attention(
+                d_model=hparams.embedding_dim, nhead=12, dropout=0.1
+            )
         lstm_input_size += hparams.embedding_dim
 
+        # BERT embeddings
         if self.hparams.use_bert:
             bert_output_dim = 768
             self.bert_embedder = BertEmbedder()
             self.bert_linear = nn.Linear(bert_output_dim, bert_output_dim)
             if self.hparams.use_attention:
-                self.attention_bert = Attention(d_model=bert_output_dim, nhead=24, dropout=0.1)
+                self.attention_bert = Attention(
+                    d_model=bert_output_dim, nhead=24, dropout=0.1
+                )
             lstm_input_size += bert_output_dim
 
+        # POS embeddings
         if self.hparams.use_pos:
             self.pos_embedding = nn.Embedding(
                 hparams.pos_vocab_size, hparams.pos_embedding_dim
@@ -69,6 +76,7 @@ class ABSAModel(nn.Module):
                 )
             lstm_input_size += hparams.pos_embedding_dim
 
+        # stacked BiLSTM layers
         self.lstm = nn.LSTM(
             lstm_input_size,
             hparams.hidden_dim,
@@ -83,10 +91,12 @@ class ABSAModel(nn.Module):
             else hparams.hidden_dim * 2
         )
 
+        # classification head
         self.classifier = nn.Linear(lstm_output_dim, hparams.num_classes)
         self.dropout = nn.Dropout(hparams.dropout)
         self.relu = nn.ReLU()
 
+        # CRF
         self.crf = CRF(num_tags=hparams.num_classes, batch_first=True)
 
     def forward(self, batch: Dict[str, Union[torch.Tensor, List[int]]]):
@@ -94,6 +104,7 @@ class ABSAModel(nn.Module):
         lengths = batch["lengths"]
         pos_tags = batch["pos_tags"]
 
+        # compute GloVe embeddings
         glove_embeddings = self.word_embedding(token_indexes)
         glove_embeddings = self.dropout(glove_embeddings)
         glove_embeddings = self.relu(self.glove_linear(glove_embeddings))
@@ -107,6 +118,7 @@ class ABSAModel(nn.Module):
 
         output = glove_embeddings
 
+        # compute BERT embeddings
         if self.hparams.use_bert:
             if not self.hparams.finetune_bert:
                 with torch.no_grad():
@@ -121,8 +133,10 @@ class ABSAModel(nn.Module):
                     key_padding_mask=~batch["attention_mask"],
                 ).transpose(0, 1)
             bert_embeddings = self.dropout(bert_embeddings)
+            # concatenate BERT embeddings to the GloVe embeddings
             output = torch.cat((output, bert_embeddings), dim=-1)
 
+        # compute POS embeddings
         if self.hparams.use_pos:
             pos_embeddings = self.pos_embedding(pos_tags)
             pos_embeddings = self.dropout(pos_embeddings)
@@ -133,8 +147,11 @@ class ABSAModel(nn.Module):
                     key_padding_mask=~batch["attention_mask"],
                 ).transpose(0, 1)
             pos_embeddings = self.dropout(pos_embeddings)
+            # concatenate POS embeddings to the GloVe + BERT embeddings
             output = torch.cat((output, pos_embeddings), dim=-1)
 
+        # pass output to the BiLSTM
         output, _ = lstm_padded(self.lstm, output, lengths)
+        # classification head
         output = self.classifier(output)
         return output

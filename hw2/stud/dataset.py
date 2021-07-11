@@ -40,6 +40,17 @@ def zero_dict() -> Dict[str, Dict[str, float]]:
 
 
 def preprocess_category(d: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
+    """This function is used to process the categories for a given sentence.
+    For example, given a sentence with the following categories: [["food", "positive"], ["service", "negative"]]
+    we want to retrieve the following dictionary:
+    {
+        "anecdotes/miscellaneous": {"positive": 0.0, "negative": 0.0, "neutral": 0.0, "conflict": 0.0},
+        "price": {"positive": 0.0, "negative": 0.0, "neutral": 0.0, "conflict": 0.0},
+        "food": {"positive": 1, "negative": 0.0, "neutral": 0.0, "conflict": 0.0},
+        "ambience": {"positive": 0.0, "negative": 0.0, "neutral": 0.0, "conflict": 0.0},
+        "service": {"positive": 0.0, "negative": 1, "neutral": 0.0, "conflict": 0.0},
+    }
+    """
     category_dict = zero_dict()
     for category, polarity in d["categories"]:
         category_dict[category][polarity] = 1
@@ -51,7 +62,7 @@ def tokens_position(
     target_char_positions: List[int],
     tokenizer: TreebankWordTokenizer,
 ) -> List[int]:
-    """Extract tokens with sentiments associated positions from position in string."""
+    """Extract the positions for the tokens with sentiments associated, from position in string."""
     s_pos, e_pos = target_char_positions
     tokens_between_positions = tokenizer.tokenize(sentence[s_pos:e_pos])
     n_tokens = len(tokens_between_positions)
@@ -60,6 +71,7 @@ def tokens_position(
 
 
 def json_to_tags(example, tokenizer: TreebankWordTokenizer, tagging_schema: str):
+    """Convert data from JSON (original) format into tags, either IOB or BIOES."""
     assert tagging_schema in ["IOB", "BIOES"], "Schema must be either `IOB` or `BIOES`."
 
     text = example["text"]
@@ -216,15 +228,6 @@ def build_vocab_category(data: List[Dict[str, Any]]) -> Tuple[Vocab, Vocab]:
     return vocab_category, vocab_polarity
 
 
-def dataset_max_len(sentences: List[List[str]]) -> int:
-    max_len = 0
-    for s in sentences:
-        length = len(s)
-        if length > max_len:
-            max_len = length
-    return max_len
-
-
 class ABSADataset(Dataset):
     def __init__(
         self,
@@ -268,6 +271,7 @@ class ABSADataset(Dataset):
         self.index_dataset()
 
     def encode_text(self, sentence: List[str], vocab) -> List[int]:
+        """Convert sentence tokens to indices using the vocabulary."""
         indices = []
         for w in sentence:
             if w in vocab.stoi:
@@ -277,6 +281,8 @@ class ABSADataset(Dataset):
         return indices
 
     def index_dataset(self):
+        """Process dataset to extrapolate all the useful inputs for the models (tokens, token indices,
+        attention masks, sentences lengths etc.)."""
         for i in range(len(self.sentences)):
             data_dict = {}
             sentence = self.sentences[i]
@@ -291,6 +297,11 @@ class ABSADataset(Dataset):
             )
 
             if self.train and self.save_categories:
+                # preprocess ground truth categories to be in the same format of the
+                # model output. That means that we want, for each category, we want to specify
+                # which polarity is associated to that category in a given sentence. That can either be
+                # one of the four polarities, or a non-polarity "O".
+                # here we build a 5x5 (num_categories x (num_polarities + 1)) tensor representing this
                 categories = self.categories[i]
                 # initialize 0-tensor
                 zeros = torch.zeros(
@@ -299,6 +310,8 @@ class ABSADataset(Dataset):
                 )
 
                 # place 1 in the polarity of a given category
+                # e.g. if we have food: positive, serivice: negative, we set to 1 the positive column of the food row,
+                # we set to 1 the negative column of the service row
                 for category, polarities in categories.items():
                     for polarity, value in polarities.items():
                         zeros[
@@ -315,6 +328,7 @@ class ABSADataset(Dataset):
                 data_dict["categories"] = zeros
 
             if self.train:
+                # save aspect sentiments labels
                 targets = self.targets[i]
                 data_dict["labels"] = torch.LongTensor(
                     [self.sentiments_vocabulary[t] for t in targets]

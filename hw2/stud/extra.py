@@ -17,23 +17,30 @@ class ABSACategoryModel(nn.Module):
         super().__init__()
         self.hparams = hparams
 
+        # final BiLSTM layer input size
+        lstm_input_size = 0
+
+        # GloVe embeddings
         self.word_embedding = nn.Embedding(hparams.vocab_size, hparams.embedding_dim)
         if embeddings is not None:
             self.word_embedding.weight.data.copy_(embeddings)
 
-        lstm_input_size = 0
         self.glove_linear = nn.Linear(hparams.embedding_dim, hparams.embedding_dim)
+        # GloVe multihead attention
         self.attention_glove = Attention(
             d_model=hparams.embedding_dim, nhead=12, dropout=0.1
         )
         lstm_input_size += hparams.embedding_dim
 
+        # BERT embeddings
         bert_output_dim = 768
         self.bert_embedder = BertEmbedder()
         self.bert_linear = nn.Linear(bert_output_dim, bert_output_dim)
+        # BERT multihead attention
         self.attention_bert = Attention(d_model=bert_output_dim, nhead=24, dropout=0.1)
         lstm_input_size += bert_output_dim
 
+        # stacked BiLSTM layers
         self.lstm = nn.LSTM(
             lstm_input_size,
             hparams.hidden_dim,
@@ -48,6 +55,7 @@ class ABSACategoryModel(nn.Module):
             else hparams.hidden_dim * 2
         )
 
+        # classification head
         self.classifier = nn.Linear(lstm_output_dim, hparams.num_classes)
         self.dropout = nn.Dropout(hparams.dropout)
         self.relu = nn.ReLU()
@@ -64,9 +72,11 @@ class ABSACategoryModel(nn.Module):
             return torch.cat((out_forward, out_reverse), dim=1)
 
     def forward(self, batch: Dict[str, Union[torch.Tensor, List[int]]]):
+        # inputs
         token_indexes = batch["token_indexes"]
         lengths = batch["lengths"]
 
+        # compute glove embeddings
         glove_embeddings = self.word_embedding(token_indexes)
         glove_embeddings = self.dropout(glove_embeddings)
         glove_embeddings = self.relu(self.glove_linear(glove_embeddings))
@@ -79,6 +89,7 @@ class ABSACategoryModel(nn.Module):
 
         output = glove_embeddings
 
+        # compute BERT embeddings
         if self.hparams.use_bert:
             bert_embeddings = self.bert_embedder(batch)
             bert_embeddings = self.dropout(bert_embeddings)
@@ -88,12 +99,17 @@ class ABSACategoryModel(nn.Module):
                 key_padding_mask=~batch["attention_mask"],
             ).transpose(0, 1)
             bert_embeddings = self.dropout(bert_embeddings)
+            # concatenate BERT embeddings to GloVe embeddings
             output = torch.cat((output, bert_embeddings), dim=-1)
 
+        # apply BiLSTM
         output = self.lstm_last(output, lengths)
 
+        # classification head
         output = self.classifier(output)
         output_softmax = self.logsoftmax(output)
+
+        # think the output as 5 independent classifications
         return output_softmax.reshape(
             -1,
             self.hparams.category_vocab_size,
@@ -119,6 +135,8 @@ class PlABSACategoryModel(pl.LightningModule):
         self.tokenizer = tokenizer
         self.detokenizer = TreebankWordDetokenizer()
         self.loss_function = nn.NLLLoss()
+
+        # use f1 metrics only during training
         if train:
             self.f1_extraction_t = F1SentimentEvaluation(
                 device=self.device, mode="Category Extraction"
@@ -148,22 +166,30 @@ class PlABSACategoryModel(pl.LightningModule):
         }
 
     def predict(self, batch: Dict[str, torch.Tensor]) -> List[Dict[str, Any]]:
+        """This method returns the predictions in their original form, as found in the dataset.
+        This way, we can compute the f1 score between the predictions and the ground truths.
+        Use this function during inference time."""
         text_predictions = self(batch)["text_predictions"]
         return text_predictions
 
     def step(self, batch: Dict[str, torch.Tensor], phase: str) -> Dict[str, Any]:
         output = self(batch)
         logits = output["logits"]
+        # for each category, get the polarity that has value = 1 (can also be "O", meaning that
+        # the sentence doesn't have that particulary category in the ground truth)
         labels = torch.argmax(batch["categories"], dim=-1)
         text_predictions = output["text_predictions"]
         text_gt = batch["raw"]
 
         step_output = {}
 
-        # compute loss and f1 score
+        # compute loss:
+        # the output of our model can be thought as it was the vector containing 5 independent predictions, for each category
+        # for this reason, we are going to compare, for each category, the logits and the labels, then we sum the results
         total_loss = 0
         for i in range(logits.shape[1]):
             total_loss += self.loss_function(logits[:, i], labels[:, i])
+        # finally, we normalize the loss by the number of categories
         step_output["loss"] = 1 / self.hparams.category_vocab_size * total_loss
 
         if phase == "train":
@@ -252,21 +278,35 @@ class PlABSACategoryModel(pl.LightningModule):
         )
 
     def process_category_prediction(self, predictions):
-        """`predictions` is a batch"""
+        """Postprocess the logits to extract the predictions in the same format of the dataset."""
         processed_outputs = []
+        # `predictions` is a batch, so we iterate in it
         for pred in predictions:
+            # given the logits, `max_pred` are, for each category, the predicted polarity
             max_pred = torch.argmax(pred, dim=-1)
 
+            # `no_category_idx` represents the index for the non-polarity "O"
+            # which we arbitrarly choose to be the last one
             no_category_idx = len(self.category_polarity_vocabulary)
 
+            # now we start to translate the predictions in a more readable format
             output = {"categories": []}
+            # for each category (represented by the index `i`)
+            # and its predicted polarity (represented by the index `pol_idx`)
             for i, pol_idx in enumerate(max_pred):
+                # if the predicted polarity for the category is the non-polarity, we skip the category
+                # since it means that the model predicted that the sentence doesn't have this category
                 if pol_idx == no_category_idx:
                     continue
+                # we retrieve the category with the vocabulary containing all the categories
                 category = self.category_vocabulary.itos[i]
+                # we retrieve the polarity with the vocabulary containing all the categories
                 polarity = self.category_polarity_vocabulary.itos[pol_idx]
+                # we append the prediction
                 output["categories"].append([category, polarity])
 
+            # once the sentence is finished, we append the predictions of this sentence
+            # and proceed with the next on the batch
             processed_outputs.append(output)
 
         return processed_outputs

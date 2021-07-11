@@ -34,6 +34,7 @@ class PlABSAModel(pl.LightningModule):
         self.loss_function = nn.CrossEntropyLoss(
             ignore_index=self.sentiments_vocabulary["<pad>"]
         )
+        # use f1 metrics only during training
         if train:
             self.f1_extraction_t = F1SentimentExtraction(device=self.device)
             self.f1_evaluation_t = F1SentimentEvaluation(device=self.device)
@@ -50,12 +51,17 @@ class PlABSAModel(pl.LightningModule):
         sentences_raw = [x["text"] for x in raw_data]
 
         logits = self.model(batch)
+
+        # if CRF is used, the Viterbi algorithm is used to compute the predictions
+        # otherwise we just take the argmax
         if not self.hparams.use_crf:
             predictions = torch.argmax(logits, -1)
         else:
             predictions = torch.tensor(
                 self.model.crf.decode(logits), device=self.device
             )
+
+        # compute `text_predictions`, that are just the predictions in readable format
         text_predictions = self._batch_sentiments_to_tags(
             sentences_raw, predictions, lengths
         )
@@ -66,6 +72,9 @@ class PlABSAModel(pl.LightningModule):
         }
 
     def predict(self, batch: Dict[str, torch.Tensor]) -> List[Dict[str, Any]]:
+        """This method returns the predictions in their original form, as found in the dataset.
+        This way, we can compute the f1 score between the predictions and the ground truths.
+        Use this function during inference time."""
         text_predictions = self(batch)["text_predictions"]
         return text_predictions
 
@@ -173,6 +182,7 @@ class PlABSAModel(pl.LightningModule):
         )
 
     def _postprocess(self, tokens: List[str], sentiments: List[str]) -> Dict[str, Any]:
+        """Postprocess the tokens and sentiments to convert them back into the JSON format of the dataset."""
         tokens2sentiments = tags_to_json(
             tokens, sentiments, self.hparams.tagging_schema
         )
