@@ -75,7 +75,7 @@
 	each token of each sentence is tagged using either an IOB (i.e., Inside,
 	Outside, Beginning) or a BIOES (i.e., Beginning, Inside, Outside, Ending,
 	Single) tagging schema, used on top of the four polarities appearing in the
-	datasets (example of the two tagging schemas in figure \ref{fig:IOB_BIOES}).
+	datasets (example of the two tagging schemas in fig. \ref{fig:IOB_BIOES}).
 	Depending on the adopted tagging schema, the model is then trained to extract
 	the right label from a set of either  $4 \cdot 2 + 1 = 9$ (for IOB) or $4 \cdot
 	4 + 1 = 17$ (for BIOES) possible classes. Finally, the model output is
@@ -103,7 +103,7 @@
 	by an embedding layer to encode the tokens of the input sentences, followed by a
 	one-on-one linear layer (i.e., input features equal to output features), two
 	stacked BiLSTM layers and a prediction block, composed by a linear layer and a
-	softmax activation (network architecture in figure \ref{fig:M0_architecture}).
+	softmax activation (network architecture in fig. \ref{fig:M0_architecture}).
 	Additionally, I replaced the randomly initialized word embeddings in the
 	embedding layer with the pre-trained word vectors of GloVe
 	\citep{pennington2014glove}.
@@ -117,7 +117,7 @@
 	
 	This very simple architecture (let's call it M0) is still able to achieve
 	decent results in terms of f1 score, reaching a maximum of 0.381 in terms of
-	macro f1 score (see figures \ref{fig:M0_loss}, \ref{fig:M0_extr},
+	macro f1 score (see figs. \ref{fig:M0_loss}, \ref{fig:M0_extr},
 	\ref{fig:M0_eval} respectively for the loss plots, f1 extraction and f1
 	extraction + evaluation plots on the train. and dev. datasets).
 	
@@ -189,8 +189,8 @@
 	
 	This was the trick that made me achieve the best results, achieving 0.544 macro
 	f1 score on the development set. Therefore, this is the final proposed model for
-	this homework (see figure \ref{fig:M3_architecture} for the model architecture,
-	figures \ref{fig:M3_loss}, \ref{fig:M3_extr}, \ref{fig:M3_eval} respectively for
+	this homework (see fig. \ref{fig:M3_architecture} for the model architecture,
+	figs. \ref{fig:M3_loss}, \ref{fig:M3_extr}, \ref{fig:M3_eval} respectively for
 	the loss plots, f1 extraction and f1 extraction + evaluation plots on the train.
 	and dev. datasets).
 	
@@ -225,7 +225,7 @@
 	wrong in the first place.
 	
 	Additionally, the aspect extraction task isn't that hard, in fact all models,
-	even the baseline one, behave quite well on that task (see figure
+	even the baseline one, behave quite well on that task (see fig.
 	\ref{fig:comparative_f1_extr}).
 	
 	For these reasons, embedding the POS tags and concatenating that to the other
@@ -240,16 +240,16 @@
 	An ablation study is proposed in the final section. Specifically, see table \ref{tab:hyperparams} for the hyperparameters of the proposed model, table 
 	\ref{tab:ab_ablation} for the performances of all the models,
 	table \ref{tab:ab_iob_bioes} for the comparison between the proposed model using
-	IOB vs the BIOES, figures \ref{fig:comparative_f1_extr} and
+	IOB vs the BIOES, figs. \ref{fig:comparative_f1_extr} and
 	\ref{fig:comparative_f1_eval} for the f1 score in terms
-	of extraction and extraction + evaluation for all the models, and figures \ref{fig:cm_M0} and \ref{fig:cm_M3} for the confusion matrices of the baseline and of the proposed model.
+	of extraction and extraction + evaluation for all the models, and figs. \ref{fig:cm_M0} and \ref{fig:cm_M3} for the confusion matrices of the baseline and of the proposed model.
 	
 	\section{Extra}
 	In this section I will talk about the additional optional task proposed, namely the combination of aspect category identification and aspect category polarity classification. For example, given the sentence "Prices are higher to dine in and their chicken tikka marsala is quite good", the task is to identify the two categories "food" and "price", and to then predict their associated polarities, in this case respectively "positive" and "negative".
 	
 	The model proposed for this task directly inherits from the model used to tackle the previous tasks, and the only modification is made on the classification head, as this can no more be considered a sequence labeling task. Instead, the model has to make five independet predictions for a given sentence, one for each category ("anecdotes/miscellaneous", "price", "food", "ambience", "service"). Each prediction will span across 5 possible classes, which are the 4 traditional polarities ("positive", "negative", "neutral", "conflict") and one additional non-polarity "O", representing the fact that the input sentence does not have the selected category between the its aspect categories.
 	
-	This way, this problem too can be approached in an end-to-end fashion, without modifying too much the initial structure proposed. Indeed, using this approach, I am able to reach satisfactory results also in this additional task, reaching 0.576 macro f1 score on the task of category extraction + polarity evaluation on the development set (that, in this case, is represented by the only Restaurants dataset).
+	This way, this problem too can be approached in an end-to-end fashion, without modifying too much the initial structure proposed. Using this approach, I am able to reach satisfactory results also in this additional task, reaching 0.576 macro f1 score on the task of category extraction + polarity evaluation on the development set (fig. \ref{fig:cd_loss}, \ref{fig:cd_f1_extr}, \ref{fig:cd_f1_eval} for the loss, macro f1 extr., macro f1 extr. + eval. plots).
 	
 	One final consideration can be made on this additional task. I think that the the connection between the two tasks could be exploited: for instance, an attempt could be made to use the predictions of the first model as input of the second model.
 	
@@ -269,8 +269,7 @@
 			neutral            & 877   & 216 \\
 			conflict           & 111   & 25  \\ \bottomrule
 		\end{tabular}
-		\caption{Polarities support for targets (task A+B) in the training and
-			development set (i.e., Restaurants + Laptops).}
+		\caption{Polarities support for aspect terms (task A+B) in the training and development set (i.e., Restaurants + Laptops).}
 		\label{tab:ab_polarities_support}
 	\end{table}
 
@@ -291,7 +290,7 @@
 			BiLSTM hidden dim.                        & 300   \\
 			Activation functions                      & ReLU  \\ \bottomrule
 		\end{tabular}
-		\caption{Hyperparameters for the proposed model.}
+		\caption{Hyperparameters for the proposed model (task A+B).}
 		\label{tab:hyperparams}
 	\end{table}
 	
@@ -321,8 +320,7 @@
 			neutral            & 411   & 89  \\
 			conflict           & 164   & 31  \\ \bottomrule
 		\end{tabular}
-		\caption{Polarities support for categories (task C+D) in the training and
-			development set (i.e., Restaurants).}
+		\caption{Polarities support for categories (task C+D) in the training and development set (i.e., Restaurants).}
 		\label{tab:cd_polarities_support}
 	\end{table}
 	
@@ -340,19 +338,7 @@
 			M4 = M3 + CRF          & 0.813          & 0.493          \\
 			M5 = M3 + POS          & 0.798          & 0.509          \\ \bottomrule
 		\end{tabular}
-		\caption{Task A+B: Models variations top performance on development set
-			(Restaurants + Laptops). For each variation, it has been selected the model with
-			the highest f1 evaluation score on the validation set. \\ The baseline model
-			(M0) is the one discussed in section (?). With "BERT" I refer to the BERT
-			Embedder introduced in section (?) (BERT$_{freeze}$ means that the BERT Embedder
-			is based on a pretrained version of the BERT model, and that there is no
-			finetuning involved during the training. Instead, BERT$_{finetune}$ means that
-			the BERT model is initially loaded from a pretrained version, but it is also
-			finetuned during training). With "ATT" I refer to a multihead self attention
-			layer, as discussed in section (?). With "CRF" I refer to Conditional Random
-			Field, as discussed in section (?). With "POS", I refer to the use of an
-			embedding layer for the part-of-speech tags of the tokens of each sentence, as
-			discussed in section (?).}
+		\caption{Task A+B: Ablation study, performances are computed on the development set (Restaurants + Laptops). For each variation, it has been selected the model with the highest f1 evaluation score on the validation set. Metric "F1 Eval." is the joint task of aspect term extraction and evaluation.}
 		\label{tab:ab_ablation}
 	\end{table}
 	
@@ -366,9 +352,7 @@
 			M3$_{\mathrm{BIOES}}$                         & 0.812          & 0.490       
 			\\ \bottomrule
 		\end{tabular}
-		\caption{Task A+B: Proposed model top performance comparison using two tagging
-			schemas: IOB (i.e., Inside-Outside-Beginning), and BIOES (i.e., beginning,
-			inside, outside, end, single).}
+		\caption{Task A+B: Proposed model top performance comparison using two tagging schemas: IOB (i.e., Inside-Outside-Beginning), and BIOES (i.e., beginning, inside, outside, end, single).}
 		\label{tab:ab_iob_bioes}
 	\end{table}
 	
@@ -406,7 +390,7 @@
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=1\columnwidth]{M3_ab_loss.png}
-		\caption{Task A+B: Final model (M3) loss on the training and development set.}
+		\caption{Task A+B: Final model (M3) loss on the training and development set. Looking at these plots and the metric ones it becomes clear that the loss cannot be the metric to be monitored (the model seems to converge after 10 epochs, while the f1 score continues to increase even after 20-30 epochs).}
 		\label{fig:M3_loss}
 	\end{figure}
 	
@@ -429,48 +413,42 @@
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=1\columnwidth]{M0_ab_f1_eval.png}
-		\caption{Task A+B: Baseline (M0) macro f1 evaluation score on the training and
-			development set.}
+		\caption{Task A+B: Baseline (M0) macro f1 evaluation (joint task extraction + polarity evaluation) score on the training and development set.}
 		\label{fig:M0_eval}
 	\end{figure}
 	
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=1\columnwidth]{M3_ab_f1_eval.png}
-		\caption{Task A+B: Final model (M3) macro f1 evaluation score on the training
-			and development set.}
+		\caption{Task A+B: Final model (M3) macro f1 evaluation (joint task extraction + polarity evaluation) score on the training and development set.}
 		\label{fig:M3_eval}
 	\end{figure}
 	
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=1\columnwidth]{ab_comparative_f1_extr.png}
-		\caption{Task A+B: Comparative plot of f1 extraction score for the 6 model
-			variations (M0, M1, M2, M3, M4, M5).}
+		\caption{Task A+B: Comparative plot of f1 extraction score for the 6 model variations (M0, M1, M2, M3, M4, M5). Overall, all models (except for the baseline) seem to produce satisfying results for this task.}
 		\label{fig:comparative_f1_extr}
 	\end{figure}
 	
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=1\columnwidth]{ab_comparative_f1_eval.png}
-		\caption{Task A+B: Comparative plot of f1 evaluation score for the 6 model
-			variations (M0, M1, M2, M3, M4, M5).}
+		\caption{Task A+B: Comparative plot of f1 evaluation score (joint task extraction + polarity evaluation) for the 6 model variations (M0, M1, M2, M3, M4, M5). \\ Even though all models works pretty much in the same way for the aspect term extraction task, the difference between the variations really starts to pop up when dealing with sentiment evaluation. This is probably due to the fact that the evaluation part requires a much more deeper understanding of the text, while the extraction part really only requires the model to exclude tokens that cannot be aspect terms (e.g., most of the times, verbs).}
 		\label{fig:comparative_f1_eval}
 	\end{figure}
 	
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=1\columnwidth]{M3_ab_IOB_vs_BIOES_f1_extr.png}
-		\caption{Task A+B: Comparative plot of f1 extraction score for the best model
-			(M3) using two different tagging schemas (IOB, BIOES).}
+		\caption{Task A+B: Comparative plot of f1 extraction score for the best model (M3) using two different tagging schemas (IOB, BIOES).}
 		\label{fig:IOB_vs_BIOES_extr}
 	\end{figure}
 	
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=1\columnwidth]{M3_ab_IOB_vs_BIOES_f1_eval.png}
-		\caption{Task A+B: Comparative plot of f1 evaluation score for the best model
-			(M3) using two different tagging schemas (IOB, BIOES).}
+		\caption{Task A+B: Comparative plot of f1 evaluation score for the best model (M3) using two different tagging schemas (IOB, BIOES). We can see that the proposed model just works better using the IOB schema. This could be due to the fact that, having a more difficult schema to follow, there is a higher chance of creating non-legal tag schemas (e.g., E-positive, B-positive, etc.).}
 		\label{fig:IOB_vs_BIOES_eval}
 	\end{figure}
 	
@@ -484,8 +462,29 @@
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=1\columnwidth]{M3_ab_confusion_matrix.png}
-		\caption{Task A+B: Normalized confusion matrix of the best model (M3).}
+		\caption{Task A+B: Normalized confusion matrix of the best model (M3). For both the baseline and the proposed model there is a really big gap between the performances on the positive label and the ones on the conflict label. Looking at table \ref{tab:ab_polarities_support}, I think one reason for this gap is given by the fact that there are much more examples in the positive class. Moreover, the conflict class is much more difficult to predict, since it must contain either some kind of uncertainty, or some mixed feelings. That could easily lead to a positive / negative classification.}
 		\label{fig:cm_M3}
+	\end{figure}
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=1\columnwidth]{M3_cd_loss.png}
+		\caption{Task C+D: Final model loss on the training and development set.}
+		\label{fig:cd_loss}
+	\end{figure}
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=1\columnwidth]{M3_cd_f1_extr.png}
+		\caption{Task C+D: Final model macro f1 extraction score on the training and development set.}
+		\label{fig:cd_f1_extr}
+	\end{figure}
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=1\columnwidth]{M3_cd_f1_eval.png}
+		\caption{Task C+D: Final model macro f1 evaluation (joint task category extraction + polarity evaluation) score on the training and development set.}
+		\label{fig:cd_f1_eval}
 	\end{figure}
 	
 	\bibliographystyle{acl_natbib}
