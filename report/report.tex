@@ -237,12 +237,12 @@
 	for its simplicity, as it really needs very basic preprocessing on the text to
 	be set up, and the output can be postprocessed trivially.
 	
-	An ablation study is proposed in the final section. Specifically, see table
-	\ref{tab:ab_ablation} for the performances of all the proposed models,
-	table \ref{tab:ab_iob_bioes} for the comparison between the proposed model using the
-	IOB vs the BIOES tagging schema, and figures \ref{fig:comparative_f1_extr} and
-	\ref{fig:comparative_f1_eval} for respectively the f1 score in terms
-	of extraction and extraction + evaluation for all the models. Check also figures \ref{fig:cm_M0} and \ref{fig:cm_M3} for the confusion matrices of the baseline and of the proposed model.
+	An ablation study is proposed in the final section. Specifically, see table \ref{tab:hyperparams} for the hyperparameters of the proposed model, table 
+	\ref{tab:ab_ablation} for the performances of all the models,
+	table \ref{tab:ab_iob_bioes} for the comparison between the proposed model using
+	IOB vs the BIOES, figures \ref{fig:comparative_f1_extr} and
+	\ref{fig:comparative_f1_eval} for the f1 score in terms
+	of extraction and extraction + evaluation for all the models, and figures \ref{fig:cm_M0} and \ref{fig:cm_M3} for the confusion matrices of the baseline and of the proposed model.
 	
 	\section{Extra}
 	In this section I will talk about the additional optional task proposed, namely the combination of aspect category identification and aspect category polarity classification. For example, given the sentence "Prices are higher to dine in and their chicken tikka marsala is quite good", the task is to identify the two categories "food" and "price", and to then predict their associated polarities, in this case respectively "positive" and "negative".
@@ -272,6 +272,27 @@
 		\caption{Polarities support for targets (task A+B) in the training and
 			development set (i.e., Restaurants + Laptops).}
 		\label{tab:ab_polarities_support}
+	\end{table}
+
+	\begin{table}[H]
+		\centering
+		\begin{tabular}{@{}ll@{}}
+			\toprule
+			\textbf{Hyperparameters}                  & Value \\ \midrule
+			Tagging schema                            & IOB   \\
+			Vocabularies min. freq.                   & 2     \\
+			Batch size                                & 16    \\
+			Optimizer                                 & AdamW \\
+			Learning rate                             & 2e-5  \\
+			Weight decay                              & 0.0   \\
+			GloVe embeddings size                     & 300   \\
+			BERT embeddings                           & 768   \\
+			BiLSTM layers                             & 2     \\
+			BiLSTM hidden dim.                        & 300   \\
+			Activation functions                      & ReLU  \\ \bottomrule
+		\end{tabular}
+		\caption{Hyperparameters for the proposed model.}
+		\label{tab:hyperparams}
 	\end{table}
 	
 	\begin{table}[H]
