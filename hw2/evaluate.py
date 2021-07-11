@@ -14,21 +14,22 @@ from typing import Tuple, List, Any, Dict
 
 TEST_MODE = False
 
+
 def count(l: List[Any]) -> Dict[Any, int]:
     d = {}
     for e in l:
         d[e] = 1 + d.get(e, 0)
     return d
 
-def read_dataset(path: str) -> List[Dict]:
 
+def read_dataset(path: str) -> List[Dict]:
     with open(path, "r") as f:
         samples = json.load(f)
 
     return samples
 
-def main(test_path: str, endpoint: str, batch_size=32):
 
+def main(test_path: str, endpoint: str, batch_size=32):
     try:
         samples = read_dataset(test_path)
     except FileNotFoundError as e:
@@ -49,8 +50,10 @@ def main(test_path: str, endpoint: str, batch_size=32):
             i = next(iterator)
         except StopIteration:
             logging.error(f'Impossible to establish a connection to the server even after 10 tries')
-            logging.error('The server is not booting and, most likely, you have some error in build_model or StudentClass')
-            logging.error('You can find more information inside logs/. Checkout both server.stdout and, most importantly, server.stderr')
+            logging.error(
+                'The server is not booting and, most likely, you have some error in build_model or StudentClass')
+            logging.error(
+                'You can find more information inside logs/. Checkout both server.stdout and, most importantly, server.stderr')
             exit(1)
 
         logging.info(f'Waiting 10 second for server to go up: trial {i}/{max_try}')
@@ -60,7 +63,8 @@ def main(test_path: str, endpoint: str, batch_size=32):
             if TEST_MODE:
                 logging.info('Test mode, skip connection test')
                 break
-            response = requests.post(endpoint, json={'samples': [{"text": "Lorem ipsum dolor sit amet.", "targets": [[[0, 11], "Lorem ipsum"]]}]}).json()
+            response = requests.post(endpoint, json={
+                'samples': [{"text": "Lorem ipsum dolor sit amet.", "targets": [[[0, 11], "Lorem ipsum"]]}]}).json()
             response['predictions_b']
             logging.info('Connection succeded')
             break
@@ -86,7 +90,9 @@ def main(test_path: str, endpoint: str, batch_size=32):
                 response['predictions_b'] = [{"targets": [term[1:] for term in sample["targets"]]} for sample in batch]
                 response['predictions_ab'] = [{"targets": [term[1:] for term in sample["targets"]]} for sample in batch]
                 if "categories" in batch[0]:
-                    response['predictions_cd'] = [{"categories": sample["categories"], "targets": [term[1:] for term in sample["targets"]]} for sample in batch]
+                    response['predictions_cd'] = [
+                        {"categories": sample["categories"], "targets": [term[1:] for term in sample["targets"]]} for
+                        sample in batch]
             else:
                 response = requests.post(endpoint, json={'samples': batch}).json()
             predictions_b.extend(response['predictions_b'])
@@ -108,7 +114,7 @@ def main(test_path: str, endpoint: str, batch_size=32):
     print('MODEL: ASPECT SENTIMENT\n')
     evaluate_sentiment(samples, predictions_b)
     print('-------------------------------------------------------\n')
-    
+
     if predictions_ab:
         print('MODEL: ASPECT SENTIMENT + ASPECT EXTRACTION\n')
         evaluate_extraction(samples, predictions_ab)
@@ -121,9 +127,10 @@ def main(test_path: str, endpoint: str, batch_size=32):
         print("_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _\n")
         evaluate_sentiment(samples, predictions_cd, 'Category Sentiment')
 
+
 def evaluate_extraction(samples, predictions_b):
     scores = {"tp": 0, "fp": 0, "fn": 0}
-    for label, pred in zip (samples, predictions_b):
+    for label, pred in zip(samples, predictions_b):
         pred_terms = {term_pred[0] for term_pred in pred["targets"]}
         gt_terms = {term_gt[1] for term_gt in label["targets"]}
 
@@ -148,10 +155,11 @@ def evaluate_extraction(samples, predictions_b):
             recall,
             f1))
 
+
 def evaluate_sentiment(samples, predictions_b, mode="Aspect Sentiment"):
     scores = {}
     if mode == 'Category Extraction':
-        sentiment_types = ["anecdotes/miscellaneous", "price", "food", "ambience"]
+        sentiment_types = ["anecdotes/miscellaneous", "price", "food", "ambience", "service"]
     else:
         sentiment_types = ["positive", "negative", "neutral", "conflict"]
     scores = {sent: {"tp": 0, "fp": 0, "fn": 0} for sent in sentiment_types + ["ALL"]}
@@ -159,19 +167,19 @@ def evaluate_sentiment(samples, predictions_b, mode="Aspect Sentiment"):
         for sentiment in sentiment_types:
             if mode == "Aspect Sentiment":
                 pred_sent = {(term_pred[0], term_pred[1]) for term_pred in pred["targets"] if
-                                    term_pred[1] == sentiment}
+                             term_pred[1] == sentiment}
                 gt_sent = {(term_pred[1], term_pred[2]) for term_pred in label["targets"] if
-                                    term_pred[2] == sentiment}
+                           term_pred[2] == sentiment}
             elif mode == 'Category Extraction' and "categories" in label:
                 pred_sent = {(term_pred[0]) for term_pred in pred["categories"] if
-                                term_pred[0] == sentiment}
+                             term_pred[0] == sentiment}
                 gt_sent = {(term_pred[0]) for term_pred in label["categories"] if
-                                term_pred[0] == sentiment}
+                           term_pred[0] == sentiment}
             elif "categories" in label:
                 pred_sent = {(term_pred[0], term_pred[1]) for term_pred in pred["categories"] if
-                                term_pred[1] == sentiment}
+                             term_pred[1] == sentiment}
                 gt_sent = {(term_pred[0], term_pred[1]) for term_pred in label["categories"] if
-                                term_pred[1] == sentiment}
+                           term_pred[1] == sentiment}
             else:
                 continue
 
@@ -214,9 +222,9 @@ def evaluate_sentiment(samples, predictions_b, mode="Aspect Sentiment"):
     scores["ALL"]["fn"] = fn
 
     # Compute Macro F1 Scores
-    scores["ALL"]["Macro_f1"] = sum([scores[ent_type]["f1"] for ent_type in sentiment_types])/len(sentiment_types)
-    scores["ALL"]["Macro_p"] = sum([scores[ent_type]["p"] for ent_type in sentiment_types])/len(sentiment_types)
-    scores["ALL"]["Macro_r"] = sum([scores[ent_type]["r"] for ent_type in sentiment_types])/len(sentiment_types)
+    scores["ALL"]["Macro_f1"] = sum([scores[ent_type]["f1"] for ent_type in sentiment_types]) / len(sentiment_types)
+    scores["ALL"]["Macro_p"] = sum([scores[ent_type]["p"] for ent_type in sentiment_types]) / len(sentiment_types)
+    scores["ALL"]["Macro_r"] = sum([scores[ent_type]["r"] for ent_type in sentiment_types]) / len(sentiment_types)
 
     print(f"{mode} Evaluation\n")
 
@@ -250,6 +258,7 @@ def evaluate_sentiment(samples, predictions_b, mode="Aspect Sentiment"):
                 "fp"]))
 
     return scores, precision, recall, f1
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
