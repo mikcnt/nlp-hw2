@@ -2,9 +2,11 @@ from typing import List
 
 import torch
 import pytorch_lightning as pl
-from torch import nn
 from torch.nn.utils.rnn import pad_sequence
-from transformers import AutoModel, AutoTokenizer
+from transformers import (
+    AutoModel,
+    AutoTokenizer,
+)
 import numpy as np
 import os
 from itertools import groupby

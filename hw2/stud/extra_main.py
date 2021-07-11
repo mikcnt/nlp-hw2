@@ -14,7 +14,6 @@ from stud.dataset import (
 )
 from stud.extra import PlABSACategoryModel
 
-from stud.pl_models import PlABSAModel
 from stud.utils import save_pickle, compute_pretrained_embeddings
 
 if __name__ == "__main__":
@@ -60,8 +59,11 @@ if __name__ == "__main__":
         "category_polarity_vocabulary": cat_pol_vocab,
     }
     # save vocabularies to file
-    save_pickle(vocabulary, "../../model/vocabulary.pkl")
-    save_pickle(sentiments_vocabulary, "../../model/sentiments_vocabulary.pkl")
+    save_pickle(vocabulary, "../../model/vocabulary_extra.pkl")
+    save_pickle(sentiments_vocabulary, "../../model/sentiments_vocabulary_extra.pkl")
+    save_pickle(pos_vocabulary, "../../model/pos_vocabulary_extra.pkl")
+    save_pickle(cat_vocab, "../../model/categories_vocabulary.pkl")
+    save_pickle(cat_pol_vocab, "../../model/categories_polarities_vocabulary.pkl")
 
     # --------- PRETRAINED EMBEDDINGS ---------
     pretrained_embeddings = compute_pretrained_embeddings(
@@ -133,7 +135,7 @@ if __name__ == "__main__":
     # logger
     overfit_batches = 0
     run_name = "best_model_"
-    wandb_logger = WandbLogger(offline=False, project="nlp-hw2-C+D", name=run_name)
+    wandb_logger = WandbLogger(offline=True, project="nlp-hw2-C+D", name=run_name)
 
     # define trainer and train
     trainer = pl.Trainer(

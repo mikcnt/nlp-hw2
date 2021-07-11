@@ -1,16 +1,19 @@
+import os
+
 import numpy as np
-from typing import List, Tuple, Dict
+from typing import List, Dict
 
-import torch
+from nltk import TreebankWordTokenizer
 from torch.utils.data import DataLoader
-from torchtext.vocab import Vectors
-from transformers import BertTokenizer
 
-from stud.dataset import preprocess, ABSADataset
+from stud.dataset import ABSADataset
+from stud.extra import PlABSACategoryModel
 from stud.pl_models import PlABSAModel
 from stud.utils import load_pickle, pad_collate, compute_pretrained_embeddings
 from model import Model
 import random
+
+os.environ["TRANSFORMERS_CACHE"] = "../../model/"
 
 
 def build_model_b(device: str) -> Model:
@@ -22,7 +25,7 @@ def build_model_b(device: str) -> Model:
         A Model instance that implements aspect sentiment analysis of the ABSA pipeline.
             b: Aspect sentiment analysis.
     """
-    return RandomBaseline()
+    return StudentModel(device)
 
 
 def build_model_ab(device: str) -> Model:
@@ -36,8 +39,6 @@ def build_model_ab(device: str) -> Model:
             b: Aspect sentiment analysis.
 
     """
-    # return RandomBaseline(mode="ab")
-    # raise NotImplementedError
     return StudentModel(device)
 
 
@@ -53,7 +54,7 @@ def build_model_cd(device: str) -> Model:
             d: Category sentiment analysis.
     """
     # return RandomBaseline(mode='cd')
-    raise NotImplementedError
+    return StudentModelExtra(device)
 
 
 class RandomBaseline(Model):
@@ -169,117 +170,24 @@ class RandomBaseline(Model):
         return preds
 
 
-class StudentModel_(Model):
-    def __init__(self, device):
-        path = "model/epoch=19_f1_val=14.8297.ckpt"
-        vocabulary_path = "model/vocabulary.pkl"
-        sentiments_vocabulary_path = "model/sentiments_vocabulary.pkl"
-        embeddings_path = "model/glove.6B.300d.txt"
-        cache_path = "model/.vector_cache/"
-        self.vocabulary = load_pickle(vocabulary_path)
-
-        self.sentiments_vocabulary = load_pickle(sentiments_vocabulary_path)
-        vocabularies = {
-            "vocabulary": self.vocabulary,
-            "sentiments_vocabulary": self.sentiments_vocabulary,
-        }
-        vectors = Vectors(embeddings_path, cache=cache_path)
-        pretrained_embeddings = torch.randn(len(self.vocabulary), vectors.dim)
-        for i, w in enumerate(self.vocabulary.itos):
-            if w in vectors.stoi:
-                vec = vectors.get_vecs_by_tokens(w)
-                pretrained_embeddings[i] = vec
-        pretrained_embeddings[self.vocabulary["<pad>"]] = torch.zeros(vectors.dim)
-        self.model = PlABSAModel.load_from_checkpoint(
-            path,
-            map_location=device,
-            vocabularies=vocabularies,
-            embeddings=pretrained_embeddings,
-        )
-        self.model.eval()
-
-    # STUDENT: construct here your model
-    # this class should be loading your weights and vocabulary
-
-    def predict(self, samples: List[Dict]) -> List[Dict]:
-        """
-        --> !!! STUDENT: implement here your predict function !!! <--
-        Args:
-            - If you are doing model_b (ie. aspect sentiment analysis):
-                sentence: a dictionary that represents an input sentence as well as the target words (aspects), for example:
-                    [
-                        {
-                            "text": "I love their pasta but I hate their Ananas Pizza.",
-                            "targets": [[13, 17], "pasta"], [[36, 47], "Ananas Pizza"]]
-                        },
-                        {
-                            "text": "The people there is so kind and the taste is exceptional, I'll come back for sure!"
-                            "targets": [[4, 9], "people", [[36, 40], "taste"]]
-                        }
-                    ]
-            - If you are doing model_ab or model_cd:
-                sentence: a dictionary that represents an input sentence, for example:
-                    [
-                        {
-                            "text": "I love their pasta but I hate their Ananas Pizza."
-                        },
-                        {
-                            "text": "The people there is so kind and the taste is exceptional, I'll come back for sure!"
-                        }
-                    ]
-        Returns:
-            A List of dictionaries with your predictions:
-                - If you are doing target word identification + target polarity classification:
-                    [
-                        {
-                            "targets": [("pasta", "positive"), ("Ananas Pizza", "negative")] # A list having a tuple for each target word
-                        },
-                        {
-                            "targets": [("people", "positive"), ("taste", "positive")] # A list having a tuple for each target word
-                        }
-                    ]
-                - If you are doing target word identification + target polarity classification + aspect category identification + aspect category polarity classification:
-                    [
-                        {
-                            "targets": [("pasta", "positive"), ("Ananas Pizza", "negative")], # A list having a tuple for each target word
-                            "categories": [("food", "conflict")]
-                        },
-                        {
-                            "targets": [("people", "positive"), ("taste", "positive")], # A list having a tuple for each target word
-                            "categories": [("service", "positive"), ("food", "positive")]
-                        }
-                    ]
-        """
-        # data = preprocess(samples, preprocess_targets=False)
-        data = ABSADataset(
-            samples,
-            self.vocabulary,
-            self.sentiments_vocabulary,
-            preprocess_targets=False,
-        )
-        loader = DataLoader(data, batch_size=1, shuffle=False, collate_fn=pad_collate)
-        all_outputs = []
-        for batch in loader:
-            output = self.model.forward_processed(batch)
-            all_outputs += output
-        return all_outputs
-
-
 class StudentModel(Model):
     def __init__(self, device):
-        path = "model/epoch=37_f1_extraction=0.6887_f1_evaluation=0.4330.ckpt"
+        path = "model/M3.ckpt"
         vocabulary_path = "model/vocabulary.pkl"
         sentiments_vocabulary_path = "model/sentiments_vocabulary.pkl"
+        pos_vocabulary_path = "model/pos_vocabulary.pkl"
         embeddings_path = "model/glove.6B.300d.txt"
         cache_path = "model/.vector_cache/"
         self.vocabulary = load_pickle(vocabulary_path)
         self.sentiments_vocabulary = load_pickle(sentiments_vocabulary_path)
-        vocabularies = {
+        self.pos_vocabulary = load_pickle(pos_vocabulary_path)
+        self.vocabularies = {
             "vocabulary": self.vocabulary,
             "sentiments_vocabulary": self.sentiments_vocabulary,
+            "pos_vocabulary": self.pos_vocabulary,
         }
         self.tagging_schema = "IOB"
-        self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
+        self.tokenizer = TreebankWordTokenizer()
         pretrained_embeddings = compute_pretrained_embeddings(
             path=embeddings_path,
             cache=cache_path,
@@ -289,20 +197,80 @@ class StudentModel(Model):
         self.model = PlABSAModel.load_from_checkpoint(
             path,
             map_location=device,
-            vocabularies=vocabularies,
+            vocabularies=self.vocabularies,
             embeddings=pretrained_embeddings,
-            tokenizer=self.tokenizer,
+            tokenizer=TreebankWordTokenizer(),
             train=False,
         )
         self.model.eval()
 
     def predict(self, samples: List[Dict]) -> List[Dict]:
         data = ABSADataset(
-            raw_data=samples,
-            vocabulary=self.vocabulary,
-            sentiments_vocabulary=self.sentiments_vocabulary,
+            samples,
+            vocabularies=self.vocabularies,
             tagging_schema=self.tagging_schema,
             tokenizer=self.tokenizer,
+            save_categories=False,
+            train=False,
+        )
+        loader = DataLoader(data, batch_size=1, shuffle=False, collate_fn=pad_collate)
+        all_outputs = []
+        for batch in loader:
+            output = self.model.predict(batch)
+            all_outputs += output
+        return all_outputs
+
+
+class StudentModelExtra(Model):
+    def __init__(self, device):
+        path = "model/M3_cd.ckpt"
+        vocabulary_path = "model/vocabulary_extra.pkl"
+        sentiments_vocabulary_path = "model/sentiments_vocabulary_extra.pkl"
+        pos_vocabulary_path = "model/pos_vocabulary_extra.pkl"
+        category_vocabulary_path = "model/categories_vocabulary.pkl"
+        category_polarities_vocabulary_path = (
+            "model/categories_polarities_vocabulary.pkl"
+        )
+
+        embeddings_path = "model/glove.6B.300d.txt"
+        cache_path = "model/.vector_cache/"
+        self.vocabulary = load_pickle(vocabulary_path)
+        self.sentiments_vocabulary = load_pickle(sentiments_vocabulary_path)
+        self.pos_vocabulary = load_pickle(pos_vocabulary_path)
+        self.cat_vocab = load_pickle(category_vocabulary_path)
+        self.cat_pol_vocab = load_pickle(category_polarities_vocabulary_path)
+        self.vocabularies = {
+            "vocabulary": self.vocabulary,
+            "sentiments_vocabulary": self.sentiments_vocabulary,
+            "pos_vocabulary": self.pos_vocabulary,
+            "category_vocabulary": self.cat_vocab,
+            "category_polarity_vocabulary": self.cat_pol_vocab,
+        }
+        self.tagging_schema = "IOB"
+        self.tokenizer = TreebankWordTokenizer()
+        pretrained_embeddings = compute_pretrained_embeddings(
+            path=embeddings_path,
+            cache=cache_path,
+            vocabulary=self.vocabulary,
+        )
+
+        self.model = PlABSACategoryModel.load_from_checkpoint(
+            path,
+            map_location=device,
+            vocabularies=self.vocabularies,
+            embeddings=pretrained_embeddings,
+            tokenizer=TreebankWordTokenizer(),
+            train=False,
+        )
+        self.model.eval()
+
+    def predict(self, samples: List[Dict]) -> List[Dict]:
+        data = ABSADataset(
+            samples,
+            vocabularies=self.vocabularies,
+            tagging_schema=self.tagging_schema,
+            tokenizer=self.tokenizer,
+            save_categories=True,
             train=False,
         )
         loader = DataLoader(data, batch_size=1, shuffle=False, collate_fn=pad_collate)

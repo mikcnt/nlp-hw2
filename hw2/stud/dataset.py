@@ -99,7 +99,7 @@ def preprocess(
         "targets": [],
         "pos_tags": [],
     }
-    if save_categories:
+    if train and save_categories:
         processed_data["categories"] = []
     for d in raw_data:
         text = d["text"]
@@ -109,13 +109,12 @@ def preprocess(
         processed_data["sentences"].append(tokens)
         processed_data["pos_tags"].append(pos_tags)
 
-        # only valid for restaurants
-        if save_categories:
-            processed_data["categories"].append(preprocess_category(d))
-
         if train:
             sentiments = json_to_tags(d, tokenizer, tagging_schema)
             processed_data["targets"].append(sentiments)
+            # only valid for restaurants
+            if save_categories:
+                processed_data["categories"].append(preprocess_category(d))
 
     return processed_data
 
@@ -254,7 +253,7 @@ class ABSADataset(Dataset):
         self.targets = preprocessed_data["targets"]
         self.pos_tags = preprocessed_data["pos_tags"]
 
-        if save_categories:
+        if train and save_categories:
             self.categories = preprocessed_data["categories"]
             self.category_vocabulary = vocabularies["category_vocabulary"]
             self.category_polarity_vocabulary = vocabularies[
@@ -291,7 +290,7 @@ class ABSADataset(Dataset):
                 self.encode_text(pos_tags, self.pos_vocabulary)
             )
 
-            if self.save_categories:
+            if self.train and self.save_categories:
                 categories = self.categories[i]
                 # initialize 0-tensor
                 zeros = torch.zeros(
