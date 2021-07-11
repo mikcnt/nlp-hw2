@@ -1,5 +1,7 @@
 from stud.dataset import read_data
 
+"""Data analysis script used to retrieve the support for each category / each task"""
+
 
 def count_polarities(dataset, mode):
     assert mode in ["targets", "categories"]
