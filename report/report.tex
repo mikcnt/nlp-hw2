@@ -56,7 +56,7 @@
 	aspects in a given sentence, and the polarities associated with those aspects.
 	For example, given the sentence "I love their pasta but I hate their Ananas
 	Pizza", the task is to first extract the two aspects "pasta" and "Ananas Pizza",
-	and to then to predict their associated polarities, in this case respectively
+	and to then predict their associated polarities, in this case respectively
 	"positive" and "negative".
 	
 	In this paper, I propose an end-to-end approach to attack this task, exploiting
@@ -124,57 +124,56 @@
 	\subsection{M1: BERT Embedder}
 	To add contextual information to my model, I decided to use BERT (Bidirectional
 	Encoder Representations Transformers) \citep{devlin2018bert}. BERT is a language
-	representation model, which uses bidirectional transformers to pre-train on a
-	very large corpus over different pre-training tasks. Then, the pre-trained BERT
+	representation model which uses bidirectional transformers to pre-train on
+	very large corpora over different pre-training tasks. Then, the pre-trained BERT
 	model can be fine-tuned to be used on other tasks. In my case, I decided to use
-	BERT as an embeding layer, as suggested in \citep{li2019exploiting}. Differently
-	from the traditional GloVe based embedding layer, which, as I already said,
-	provide only context-independent representation for each token, using BERT as an
-	embedding layer does provide context-dependant information about each token in a
+	BERT as an embedding layer, as suggested in \citep{li2019exploiting}. Differently
+	from the traditional GloVe based embedding layer, which, as previously mentioned,
+	provides only context-independent representation for each token, using BERT as an
+	embedding layer provides context-dependant information about each token in a
 	sentence.
 	
-	To get the most out of BERT, I followed one of the approaches proposed in
-	\citep{acs2021subword} as pooling strategy. In particular, the approach can be
+	To get the most out of BERT, I followed one of the approaches proposed by
+	\citep{acs2021subword} as the pooling strategy. In particular, the approach can be
 	summarized in two steps: first, the BERT embeddings for the subwords of each
-	token are computed. This is achieved by averaging the last 3 hidden layers of
+	token are computed: this is achieved by averaging the last 3 hidden layers of
 	BERT. Then, the weighted average of the subwords embeddings are computed, based
 	on the BPE length of each token.
 	
 	This process can be carried out in two ways: keeping the BERT parameters
-	freezed, or keeping them free and finetuning them during the training process.
+	frozen, or allowing them to change and finetuning them during the training process.
 	These two possible choices are the basis of a trade off between two possible
-	scenarios: on the one hand, keeping the BERT weights freezed, we have a much
-	easier time when training our model, in terms of both training time, and
+	scenarios: on the one hand, keeping the BERT weights frozen, we have a much
+	easier time when training our model, in terms of both training time and
 	flexibility in the choice of the hyperparameters. On the other, learning also
-	the parameters for the BERT model gives the chance to, potentially, achieve much
-	better results.
+	the parameters for the BERT model allows to potentially achieve much better results.
 	
 	Once the BERT embeddings have been computed, similarly to the GloVe embeddings,
 	they are too passed into a linear layer with a ReLU activation, and subsequently
 	concatenated with the GloVe pretrained embeddings. The rest of the network is
 	the same. Adding context-dependent information with BERT and keeping its
-	parameters freezed (let's call this model M1), the model reaches 0.466 macro f1
+	parameters frozen (let's call this model M1), the model reaches 0.466 macro f1
 	score on the dev set.
 	
 	\subsection{M2: Finetuning BERT}
 	As already discussed, there is a big trade-off between training feasibility and
-	performances. Obviously, exploiting the general representation given by BERT for
+	performances. Exploiting the general representation given by BERT for
 	such a fine-grained task as aspect based sentiment analysis is far from ideal,
 	and therefore it just makes sense to fine-tune the BERT parameters. In order to
 	do so, I noticed that the value for the optimizer learning rate really made a
 	difference when fine-tuning the BERT embedder. Once a good value for that was
 	found, I was able to reach 0.497 macro f1 score on the development set, just by
-	unblocking the BERT parameters.
+	not freezing the BERT parameters.
 	
 	\subsection{M3: Self-Attention}
 	Self-attention is an attention mechanism relating different positions
-	of a single sequence in order to compute a representation of the same sequence.
+	of a single sequence, in order to compute a new representation of the same sequence.
 	It has been made popular by \citep{vaswani2017attention}, and, intuitively, it
 	makes it possible for the network to focus on relevant parts of a sentence. The
 	attention scores are computed as follows:
 	
 	\begin{equation}
-	\mathrm{Attention}(Q, K, V) = \mathrm{softmax}(\frac{QK^T}{\sqrt{d_k}})V
+	\mathrm{Attention}(Q, K, V) = \mathrm{softmax}(\frac{QK^T}{\sqrt{d_k}})V.
 	\end{equation}
 	
 	To attend different parts of a sentence, multiple attention heads can be
@@ -184,10 +183,9 @@
 	
 	For my use case, I used Multi-head Attention as a feature extractor on both the
 	GloVe embeddings and on the BERT embeddings, respectively using 12 and 24 heads.
-	Then, as in the previous versions, I concatenated the two resulting embeddings,
-	and passed the result to the stacked BiLSTM layers and to the prediction block.
+	Then, as in the previous versions, I concatenated the two resulting embeddings, passed the result to the stacked BiLSTM layers, and finally to the prediction block.
 	
-	This was the trick that made me achieve the best results, achieving 0.544 macro
+	This was the trick that made me reach the best results, achieving 0.544 macro
 	f1 score on the development set. Therefore, this is the final proposed model for
 	this homework (see fig. \ref{fig:M3_architecture} for the model architecture,
 	figs. \ref{fig:M3_loss}, \ref{fig:M3_extr}, \ref{fig:M3_eval} respectively for
@@ -195,29 +193,24 @@
 	and dev. datasets).
 	
 	\section{Honorable mentions}
-	In this section I'll briefly talk about two techniques that I applied, and for
-	which I had good expectations, but which, unfortunately, didn't translate
-	directly into better performances.
+	In this section I'll briefly talk about two techniques that I tried, for	which I had good expectations, but that, eventually, didn't make the cut.
 	
 	\subsection{M4: Conditional Random Field}
-	Conditional Random Fields \citep{lafferty2001conditional} are very often used
+	Conditional Random Fields (CRF) \citep{lafferty2001conditional} are very often used
 	with success in sequence labeling tasks such as named entity recognition, as
 	they model the likelihood of a given sequence, implementing dependencies between
 	the predictions.  For this reason, it seemed like a natural choice to adopt this
-	approach in my use case. Unfortunately, this wasn't the case, as, using CRF, the
-	model performance has dropped to 0.493. I suspect that the reason behind it is
+	approach in my use case. Unfortunately, this wasn't the case for the ABSA task, as, using CRF, the
+	model performance has dropped to 0.493. I suspect that the reason behind this is
 	that the embeddings computed with BERT provide enough information for a linear
-	layer to work just better. In fact, removing the BERT embeddings and relying
-	only on context-free embeddings given by GloVe, the CRF actually makes a
-	difference, increasing the performances of the baseline model to 0.391 (from
-	0.381).
+	layer to work just better. In fact, removing the BERT embeddings and relying	only on context-free embeddings given by GloVe, the CRF starts to shine, increasing the performances of the baseline model to from 0.381 to 0.391.
 	
 	\subsection{M5: POS embeddings}
 	In theory, part-of-speech tags should be an important tool, specifically in the
 	aspect term extraction part. In fact, most of the aspect terms are represented
 	by nouns, and therefore identifying the part of speech should at least work as a
 	first selection, to rule out words that are very unlikely to be aspect terms. In
-	practice, this didn't turn out to be true. I guess that there are several
+	practice, this didn't turn out to be true. I believe that there are several
 	reasons why this is the case. First of all, the dataset doesn't provide a gold
 	label for the POS tags of the tokens, and therefore, we must produce our own POS
 	tags using a pretrained model. This means that we are injecting in our data a
@@ -247,9 +240,9 @@
 	\section{Extra}
 	In this section I will talk about the additional optional task proposed, namely the combination of aspect category identification and aspect category polarity classification. For example, given the sentence "Prices are higher to dine in and their chicken tikka marsala is quite good", the task is to identify the two categories "food" and "price", and to then predict their associated polarities, in this case respectively "positive" and "negative".
 	
-	The model proposed for this task directly inherits from the model used to tackle the previous tasks, and the only modification is made on the classification head, as this can no more be considered a sequence labeling task. Instead, the model has to make five independet predictions for a given sentence, one for each category ("anecdotes/miscellaneous", "price", "food", "ambience", "service"). Each prediction will span across 5 possible classes, which are the 4 traditional polarities ("positive", "negative", "neutral", "conflict") and one additional non-polarity "O", representing the fact that the input sentence does not have the selected category between the its aspect categories.
+	The model proposed for this task directly inherits from the model used to tackle the previous tasks, and the only modification is made on the classification head, as this can no more be considered a sequence labeling task. Instead, the model has to make five independet predictions for a given sentence, one for each category ("anecdotes/miscellaneous", "price", "food", "ambience", "service"). Each prediction will span across 5 possible classes, which are the 4 traditional polarities ("positive", "negative", "neutral", "conflict") and one additional non-polarity "O", representing the fact that the input sentence does not have the selected category between its aspect categories.
 	
-	This way, this problem too can be approached in an end-to-end fashion, without modifying too much the initial structure proposed. Using this approach, I am able to reach satisfactory results also in this additional task, reaching 0.576 macro f1 score on the task of category extraction + polarity evaluation on the development set (fig. \ref{fig:cd_loss}, \ref{fig:cd_f1_extr}, \ref{fig:cd_f1_eval} for the loss, macro f1 extr., macro f1 extr. + eval. plots).
+	This way, this problem too can be approached in an end-to-end fashion, without modifying too much the initial structure proposed. Using this approach, I am able to reach satisfactory results also in this additional task, reaching 0.576 macro f1 score on the task of category extraction + polarity evaluation on the development set (see figs. \ref{fig:cd_loss}, \ref{fig:cd_f1_extr}, \ref{fig:cd_f1_eval} for the loss, macro f1 extr., macro f1 extr. + eval. plots).
 	
 	One final consideration can be made on this additional task. I think that the the connection between the two tasks could be exploited: for instance, an attempt could be made to use the predictions of the first model as input of the second model.
 	
@@ -277,22 +270,27 @@
 		\centering
 		\begin{tabular}{@{}ll@{}}
 			\toprule
-			\textbf{Hyperparameters}                  & Value \\ \midrule
-			Tagging schema                            & IOB   \\
-			Vocabularies min. freq.                   & 2     \\
-			Batch size                                & 16    \\
-			Optimizer                                 & AdamW \\
-			Learning rate                             & 2e-5  \\
-			Weight decay                              & 0.0   \\
-			GloVe embeddings size                     & 300   \\
-			BERT embeddings                           & 768   \\
-			BiLSTM layers                             & 2     \\
-			BiLSTM hidden dim.                        & 300   \\
-			Activation functions                      & ReLU  \\ \bottomrule
+			\textbf{Hyperparameters} & Value                 \\ \midrule
+			Tagging schema                            & IOB                   \\
+			Vocabularies min. freq.                   & 2                     \\
+			Batch size                                & 16                    \\
+			Loss function                             & Cross Entropy         \\
+			Optimizer                                 & AdamW                 \\
+			Learning rate                             & 2e-5                  \\
+			Weight decay                              & 0.0                   \\
+			Dropout rate                              & 0.5                   \\
+			Dropout on attention                      & 0.1                   \\
+			GloVe embeddings size                     & 300                   \\
+			BERT embeddings                           & 768 (bert-base-cased) \\
+			BiLSTM layers                             & 2                     \\
+			BiLSTM hidden dim.                        & 300                   \\
+			Activation functions                      & ReLU                  \\ \bottomrule
 		\end{tabular}
 		\caption{Hyperparameters for the proposed model (task A+B).}
 		\label{tab:hyperparams}
 	\end{table}
+
+	
 	
 	\begin{table}[H]
 		\centering
