@@ -114,7 +114,7 @@ if __name__ == "__main__":
     # callbacks
     early_stop_callback = EarlyStopping(
         monitor="f1_evaluation_val",
-        patience=1000,
+        patience=10,
         verbose=False,
         mode="max",
     )
