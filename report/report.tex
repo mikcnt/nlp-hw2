@@ -101,7 +101,7 @@
 	\subsection{M0: Baseline}
 	The first model used to solve the ABSA task is a very simple network, composed
 	by an embedding layer to encode the tokens of the input sentences, followed by a
-	one-on-one linear layer (i.e., input features equal to output features), two
+	one-on-one linear layer (i.e., input features = output features) with ReLU activation, two
 	stacked BiLSTM layers and a prediction block, composed by a linear layer and a
 	softmax activation (network architecture in fig. \ref{fig:M0_architecture}).
 	Additionally, I replaced the randomly initialized word embeddings in the
@@ -127,7 +127,7 @@
 	representation model which uses bidirectional transformers to pre-train on
 	very large corpora over different pre-training tasks. Then, the pre-trained BERT
 	model can be fine-tuned to be used on other tasks. In my case, I decided to use
-	BERT as an embedding layer, as suggested in \citep{li2019exploiting}. Differently
+	BERT as an embedding layer, as suggested by \citep{li2019exploiting}. Differently
 	from the traditional GloVe based embedding layer, which, as previously mentioned,
 	provides only context-independent representation for each token, using BERT as an
 	embedding layer provides context-dependant information about each token in a
@@ -203,7 +203,7 @@
 	approach in my use case. Unfortunately, this wasn't the case for the ABSA task, as, using CRF, the
 	model performance has dropped to 0.493. I suspect that the reason behind this is
 	that the embeddings computed with BERT provide enough information for a linear
-	layer to work just better. In fact, removing the BERT embeddings and relying	only on context-free embeddings given by GloVe, the CRF starts to shine, increasing the performances of the baseline model to from 0.381 to 0.391.
+	layer to work just better. In fact, removing the BERT embeddings and relying	only on context-free embeddings given by GloVe, the CRF starts to shine, increasing the performances of the baseline model from 0.381 to 0.391.
 	
 	\subsection{M5: POS embeddings}
 	In theory, part-of-speech tags should be an important tool, specifically in the
@@ -225,7 +225,7 @@
 	word representations made the performances drop to 0.509.
 	
 	\section{Conclusion}
-	In this paper I have analyzed the performance of various models. In the end, I think I have reached satisfactory results. Moreover, I
+	In this paper I have analyzed the performance of various models. In the end, I believe I have reached satisfactory results. Moreover, I
 	think that the use of an end-to-end model for this task can be very beneficial
 	for its simplicity, as it really needs very basic preprocessing on the text to
 	be set up, and the output can be postprocessed trivially.
@@ -233,7 +233,7 @@
 	An ablation study is proposed in the final section. Specifically, see table \ref{tab:hyperparams} for the hyperparameters of the proposed model, table 
 	\ref{tab:ab_ablation} for the performances of all the models,
 	table \ref{tab:ab_iob_bioes} for the comparison between the proposed model using
-	IOB vs the BIOES, figs. \ref{fig:comparative_f1_extr} and
+	IOB vs BIOES, figs. \ref{fig:comparative_f1_extr} and
 	\ref{fig:comparative_f1_eval} for the f1 score in terms
 	of extraction and extraction + evaluation for all the models, and figs. \ref{fig:cm_M0} and \ref{fig:cm_M3} for the confusion matrices of the baseline and of the proposed model.
 	
@@ -276,6 +276,7 @@
 			Batch size                                & 16                    \\
 			Loss function                             & Cross Entropy         \\
 			Optimizer                                 & AdamW                 \\
+			Epochs                                    & 81 \\
 			Learning rate                             & 2e-5                  \\
 			Weight decay                              & 0.0                   \\
 			Dropout rate                              & 0.5                   \\
@@ -364,7 +365,7 @@
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=0.7\columnwidth]{M0_diagram.pdf}
-		\caption{Baseline model (M0) architecture.}
+		\caption{Baseline model (M0) architecture. There is a dropout layer after the GloVe embedding layer, and after the BiLSTM layer.}
 		\label{fig:M0_architecture}
 	\end{figure}
 	
@@ -372,7 +373,7 @@
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=0.9\columnwidth]{M3_diagram.pdf}
-		\caption{Final model (M3) architecture.}
+		\caption{Final model (M3) architecture. There are dropouts after the GloVe embedding layer, the BERT embedding layer, after both attention layers, and after the BiLSTM layer.}
 		\label{fig:M3_architecture}
 	\end{figure}
 	

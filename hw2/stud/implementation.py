@@ -213,7 +213,7 @@ class StudentModel(Model):
             save_categories=False,
             train=False,
         )
-        loader = DataLoader(data, batch_size=1, shuffle=False, collate_fn=pad_collate)
+        loader = DataLoader(data, batch_size=16, shuffle=False, collate_fn=pad_collate)
         all_outputs = []
         for batch in loader:
             output = self.model.predict(batch)
@@ -273,7 +273,7 @@ class StudentModelExtra(Model):
             save_categories=True,
             train=False,
         )
-        loader = DataLoader(data, batch_size=1, shuffle=False, collate_fn=pad_collate)
+        loader = DataLoader(data, batch_size=16, shuffle=False, collate_fn=pad_collate)
         all_outputs = []
         for batch in loader:
             output = self.model.predict(batch)
