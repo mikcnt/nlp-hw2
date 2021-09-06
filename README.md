@@ -1,16 +1,6 @@
-# NLP-2021: Second Homework
-This is the second homework of the NLP 2021 course at Sapienza University of Rome.
+# Aspect-Based Sentiment Analysis
+This is my solution for the second homework of the NLP 2021 course at Sapienza University of Rome.
 
-#### Instructor
-* **Roberto Navigli**
-	* Webpage: http://wwwusers.di.uniroma1.it/~navigli/
-
-#### Teaching Assistants
-* **Cesare Campagnano**
-* **Pere-Lluís Huguet Cabot**
-
-#### Course Info
-* http://naviglinlp.blogspot.com/
 
 ## Requirements
 
